@@ -21,6 +21,7 @@ dependencies = [
     "opentelemetry-sdk>=1.27",
     "psutil>=6.0",
     "groq>=0.11",
+    "ddgs>=9.0",
     "httpx>=0.27",
 ]
 
