@@ -1,4 +1,4 @@
-"""FastAPI uygulamasi — agent'lari HTTP uzerinden acar."""
+"""FastAPI uygulamasi - agent'lari HTTP uzerinden acar."""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -15,7 +15,7 @@ logger = structlog.get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup")
-    agents.init_agents()
+    await agents.init_agents()
     yield
     logger.info("api.shutdown")
 

@@ -1,10 +1,10 @@
-"""Uygulama yapılandırması — .env'den okur."""
+"""Uygulama yapilandirmasi - .env'den okur."""
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Tüm uygulama ayarları."""
+    """Tum uygulama ayarlari."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -19,11 +19,13 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
+    use_redis_bus: bool = False
 
     # LLM
     openai_api_key: str = ""
     anthropic_api_key: str = ""
-    default_llm_model: str = "gpt-4o-mini"
+    groq_api_key: str = ""
+    default_llm_model: str = "openai/gpt-oss-120b"
 
     # API
     api_host: str = "0.0.0.0"
@@ -32,5 +34,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Ayarları cache'li şekilde döner."""
+    """Ayarlari cache'li sekilde doner."""
     return Settings()

@@ -12,28 +12,27 @@ from fastapi import APIRouter, HTTPException
 from agents.ai import LLMAgent, ResearcherAgent
 from api.schemas import AgentInfo, AgentsResponse, AskRequest, AskResponse, Source
 from core.base_agent import BaseAgent, Message
+from core.config import get_settings
 from core.message_bus import MessageBus
+from core.redis_bus import RedisMessageBus
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["agents"])
 
 
-# --- Global state ---
-_bus: MessageBus | None = None
+_bus: Any = None
 _agents: dict[str, BaseAgent] = {}
 _response_futures: dict[str, asyncio.Future] = {}
+_bus_type: str = "in-memory"
 
 
 class ResponseCollector(BaseAgent):
     """API tarafindan gonderilen isteklerin cevaplarini toplar."""
 
-    def __init__(self, name: str, bus: MessageBus) -> None:
+    def __init__(self, name: str, bus: Any) -> None:
         super().__init__(name, bus)
 
     async def handle(self, message: Message) -> None:
-        # Gelen result mesajinin id'si ile eslesen future'i bul
-        # Not: agent'lar send() yaparken YENI id uretiyor,
-        # o yuzden once sender-tabanli, sonra sirayla kontrol et
         for fid, fut in list(_response_futures.items()):
             if not fut.done():
                 fut.set_result(message.content)
@@ -41,20 +40,31 @@ class ResponseCollector(BaseAgent):
                 return
 
 
-def init_agents() -> None:
-    """Uygulama baslarken agent'lari olusturur."""
-    global _bus, _agents
+async def init_agents() -> None:
+    """Uygulama baslarken agent'lari olusturur. Redis varsa ona baglanir."""
+    global _bus, _agents, _bus_type
     if _bus is not None:
         return
 
-    _bus = MessageBus()
+    settings = get_settings()
+
+    if settings.use_redis_bus:
+        _bus = RedisMessageBus(redis_url=settings.redis_url)
+        await _bus.connect()
+        _bus_type = "redis"
+        logger.info("api.bus_initialized", bus="redis", url=settings.redis_url)
+    else:
+        _bus = MessageBus()
+        _bus_type = "in-memory"
+        logger.info("api.bus_initialized", bus="in-memory")
+
     ResponseCollector("__api_collector__", _bus)
 
     _agents = {
         "researcher": ResearcherAgent("researcher", _bus),
         "llm": LLMAgent("llm", _bus, system_prompt="Kisa ve oz cevap ver."),
     }
-    logger.info("api.agents_initialized", agents=list(_agents.keys()))
+    logger.info("api.agents_initialized", agents=list(_agents.keys()), bus=_bus_type)
 
 
 def get_agent(name: str) -> BaseAgent:
@@ -67,8 +77,7 @@ def get_agent(name: str) -> BaseAgent:
 
 @router.get("/agents", response_model=AgentsResponse)
 async def list_agents() -> AgentsResponse:
-    """Kayitli agent'lari listeler."""
-    init_agents()
+    await init_agents()
     return AgentsResponse(
         agents=[AgentInfo(name=n) for n in _agents],
         count=len(_agents),
@@ -77,19 +86,16 @@ async def list_agents() -> AgentsResponse:
 
 @router.post("/ask", response_model=AskResponse)
 async def ask(req: AskRequest) -> AskResponse:
-    """Bir agent'a soru sorar, cevabi bekler."""
-    init_agents()
-    get_agent(req.agent)  # validate
+    await init_agents()
+    get_agent(req.agent)
 
     start = time.perf_counter()
 
-    # Future olustur
     fid = str(uuid.uuid4())
     loop = asyncio.get_running_loop()
     future: asyncio.Future = loop.create_future()
     _response_futures[fid] = future
 
-    # Mesaji gonder (sender = collector, boylece cevap oraya gelir)
     msg = Message(
         sender="__api_collector__",
         receiver=req.agent,
@@ -97,7 +103,7 @@ async def ask(req: AskRequest) -> AskResponse:
         msg_type="task",
         id=fid,
     )
-    await _bus.publish(msg)  # type: ignore[union-attr]
+    await _bus.publish(msg)
 
     try:
         result = await asyncio.wait_for(future, timeout=req.timeout)
@@ -121,7 +127,7 @@ async def ask(req: AskRequest) -> AskResponse:
                 agent=req.agent,
                 sources=sources,
                 duration_ms=duration_ms,
-                raw={"source_count": result.get("source_count", 0)},
+                raw={"source_count": result.get("source_count", 0), "bus": _bus_type},
             )
 
         if "answer" in result:
