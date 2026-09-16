@@ -239,6 +239,7 @@ loginScreen.style.display = "none";
 mainApp.classList.add("visible");
 userInfo.textContent = currentUser;
 loadAgents();
+loadHistory();
 messageInput.focus();
 }
 
@@ -290,17 +291,17 @@ if (!ttsEnabled) stopSpeaking();
 const SPEECH_CORRECTIONS = [
 [/\bfayton\b/gi, "python"],
 [/\bpiton\b/gi, "python"],
-[/\bpayt[ıi]n\b/gi, "python"],
-[/\bfayt[ıi]n\b/gi, "python"],
+[/\bpayt[Ã„Â±i]n\b/gi, "python"],
+[/\bfayt[Ã„Â±i]n\b/gi, "python"],
 [/\bcava\s*skript\b/gi, "javascript"],
 [/\bjava\s*skript\b/gi, "javascript"],
 [/\bcavaskript\b/gi, "javascript"],
 [/\bfibonachi\b/gi, "fibonacci"],
-[/\bfibona[çc]i\b/gi, "fibonacci"],
+[/\bfibona[ÃƒÂ§c]i\b/gi, "fibonacci"],
 [/\bsitem\b/gi, "system"],
 [/\bsistem\b/gi, "system"],
 [/\bsamari[sz]er\b/gi, "summarizer"],
-[/\bara[şs]t[ıi]r\b/gi, "arastir"],
+[/\bara[Ã…Å¸s]t[Ã„Â±i]r\b/gi, "arastir"],
 [/\bne\s*dir\b/gi, "nedir"],
 [/\bmeraba\b/gi, "merhaba"],
 ];
@@ -515,6 +516,40 @@ if ("speechSynthesis" in window) {
 window.speechSynthesis.getVoices();
 window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 }
+
+async function loadHistory() {
+    if (!currentUser) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/memory/${currentUser}?limit=50`, {
+            headers: authHeaders()
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.messages || data.messages.length === 0) return;
+
+        chat.innerHTML = "";
+
+        data.messages.forEach(msg => {
+            if (msg.role === "user") {
+                addMessage(msg.content, "user");
+            } else if (msg.role === "assistant") {
+                addMessage(msg.content, "assistant", msg.sources || []);
+            }
+        });
+
+        const info = document.createElement("div");
+        info.className = "message assistant";
+        info.style.fontSize = "12px";
+        info.style.opacity = "0.6";
+        info.textContent = "--- " + data.count + " eski mesaj yuklendi ---";
+        chat.appendChild(info);
+        chat.scrollTop = chat.scrollHeight;
+
+    } catch (e) {
+        console.error("History load error:", e);
+    }
+}
+
 </script>
 </body>
 </html>
