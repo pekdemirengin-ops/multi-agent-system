@@ -9,7 +9,7 @@ from typing import Any
 import structlog
 from fastapi import APIRouter, HTTPException
 
-from agents.ai import CoderAgent, LLMAgent, ResearcherAgent
+from agents.ai import CoderAgent, LLMAgent, PlannerAgent, ResearcherAgent
 from agents.devops import SystemAgent
 from api.schemas import AgentInfo, AgentsResponse, AskRequest, AskResponse, Source
 from core.base_agent import BaseAgent, Message
@@ -28,8 +28,6 @@ _bus_type: str = "in-memory"
 
 
 class ResponseCollector(BaseAgent):
-    """API tarafindan gonderilen isteklerin cevaplarini toplar."""
-
     def __init__(self, name: str, bus: Any) -> None:
         super().__init__(name, bus)
 
@@ -42,8 +40,7 @@ class ResponseCollector(BaseAgent):
 
 
 async def init_agents() -> None:
-    """Uygulama baslarken agent'lari olusturur."""
-    global _bus, _agents, _bus_type
+    global _bus, _bus_type
     if _bus is not None:
         return
 
@@ -61,12 +58,16 @@ async def init_agents() -> None:
 
     ResponseCollector("__api_collector__", _bus)
 
-    _agents = {
-        "researcher": ResearcherAgent("researcher", _bus),
-        "llm": LLMAgent("llm", _bus, system_prompt="Kisa ve oz cevap ver."),
-        "system": SystemAgent("system", _bus),
-        "coder": CoderAgent("coder", _bus),
-    }
+    _agents.clear()
+    _agents.update(
+        {
+            "researcher": ResearcherAgent("researcher", _bus),
+            "llm": LLMAgent("llm", _bus, system_prompt="Kisa ve oz cevap ver."),
+            "system": SystemAgent("system", _bus),
+            "coder": CoderAgent("coder", _bus),
+            "planner": PlannerAgent("planner", _bus),
+        }
+    )
     logger.info("api.agents_initialized", agents=list(_agents.keys()), bus=_bus_type)
 
 
@@ -146,6 +147,19 @@ async def ask(req: AskRequest) -> AskResponse:
                 agent=req.agent,
                 sources=[],
                 duration_ms=duration_ms,
+            )
+
+        if "plan" in result:
+            plan = result["plan"]
+            steps_text = "\n".join(
+                f"{i}. [{s.get('agent', '?')}] {s.get('task', '')}"
+                for i, s in enumerate(plan.get("steps", []), 1)
+            )
+            return AskResponse(
+                answer=f"Plan ({len(plan.get('steps', []))} adim):\n{steps_text}",
+                agent=req.agent,
+                duration_ms=duration_ms,
+                raw={"plan": plan, "bus": _bus_type},
             )
 
     return AskResponse(
