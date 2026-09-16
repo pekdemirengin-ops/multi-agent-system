@@ -9,7 +9,8 @@ from typing import Any
 import structlog
 from fastapi import APIRouter, HTTPException
 
-from agents.ai import LLMAgent, ResearcherAgent
+from agents.ai import CoderAgent, LLMAgent, ResearcherAgent
+from agents.devops import SystemAgent
 from api.schemas import AgentInfo, AgentsResponse, AskRequest, AskResponse, Source
 from core.base_agent import BaseAgent, Message
 from core.config import get_settings
@@ -41,7 +42,7 @@ class ResponseCollector(BaseAgent):
 
 
 async def init_agents() -> None:
-    """Uygulama baslarken agent'lari olusturur. Redis varsa ona baglanir."""
+    """Uygulama baslarken agent'lari olusturur."""
     global _bus, _agents, _bus_type
     if _bus is not None:
         return
@@ -63,6 +64,8 @@ async def init_agents() -> None:
     _agents = {
         "researcher": ResearcherAgent("researcher", _bus),
         "llm": LLMAgent("llm", _bus, system_prompt="Kisa ve oz cevap ver."),
+        "system": SystemAgent("system", _bus),
+        "coder": CoderAgent("coder", _bus),
     }
     logger.info("api.agents_initialized", agents=list(_agents.keys()), bus=_bus_type)
 
@@ -127,7 +130,14 @@ async def ask(req: AskRequest) -> AskResponse:
                 agent=req.agent,
                 sources=sources,
                 duration_ms=duration_ms,
-                raw={"source_count": result.get("source_count", 0), "bus": _bus_type},
+                raw={
+                    "source_count": result.get("source_count", 0),
+                    "bus": _bus_type,
+                    "status": result.get("status"),
+                    "alerts": result.get("alerts"),
+                    "code": result.get("code"),
+                    "execution": result.get("execution"),
+                },
             )
 
         if "answer" in result:
