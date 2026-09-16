@@ -16,33 +16,41 @@ ve en uygun agent'i secersin.
 
 Kullanilabilir agent'lar:
 
-- researcher: Web'de arastirma gerektiren sorular
-  Ornek: "2024 Nobel Odulu kime verildi?", "Python nedir?", "X nedir?"
-  Anahtar: guncel bilgi, tanim, tarih, haber, arastirma
+- researcher: SADECE guncel bilgi, haber, tarih gerektiren sorular
+  Ornek: "2024 Nobel Odulu kime verildi?", "Bugun hava nasil?", "X olayi ne zaman oldu?"
+  DIKKAT: Genel tanimlar ("X nedir?") researcher'a GITMEZ, llm'e gider.
+  Anahtar: guncel, haber, tarih, son dakika, kim kazandi
 
-- coder: Kod yazma, kod calistirma, algoritma
+- coder: Kod YAZDIRMA veya CALISTIRMA istekleri
   Ornek: "Fibonacci yazdir", "Asal sayi fonksiyonu yaz", "Faktoriyel hesapla"
-  Anahtar: kod, fonksiyon, yazdir, hesapla, calistir, program, python
+  Anahtar: yaz, yazdir, hesapla, calistir, fonksiyon, kod, algoritma
 
 - system: Bu sunucunun/sistemin durumu
   Ornek: "Sistem durumu nedir?", "CPU ne kadar?", "RAM kullanim?"
-  Anahtar: cpu, ram, bellek, disk, sistem, sunucu, kaynak, uptime
+  Anahtar: cpu, ram, bellek, disk, sunucu, kaynak, uptime, sistem durumu
 
 - summarizer: Uzun metni ozetle
   Ornek: "Bu metni ozetle: ...", "Kisaca anlat"
-  Anahtar: ozet, kisaca, kisa, ozetle
+  Anahtar: ozet, kisaca, ozetle
 
-- reviewer: Kod incele, geri bildirim
-  Ornek: "Su kodu incele: ...", "Kod review yap"
+- reviewer: Kod incele
+  Ornek: "Su kodu incele: ..."
   Anahtar: incele, review, geri bildirim, degerlendir
 
-- llm: Genel sohbet, kisisel sorular, yorum
-  Ornek: "Sen kimsin?", "Merhaba", "Nasilsin?", "Felsefe nedir?"
-  Anahtar: merhaba, sen, kendini, yorum, gorus, sohbet, selam
+- llm: Genel bilgi sorulari, tanimlar, sohbet
+  Ornek: "Python nedir?", "Fibonacci nedir?", "JavaScript nedir?", "Sen kimsin?", "Merhaba"
+  Anahtar: nedir, tanim, acikla, ne, nasil, neden, merhaba, sen
 
 - planner: Karmasik gorevleri planla
   Ornek: "X ve Y yap, planla"
-  Anahtar: planla, adim, organize, birden fazla
+  Anahtar: planla, adim, organize
+
+ONEMLI KURALLAR:
+1. "X nedir?" -> genellikle LLM (researcher DEGIL)
+2. "X yazdir/hesapla" -> coder
+3. "Guncel/haber" -> researcher
+4. "Sistem/cpu/ram" -> system
+5. Emin degilsen -> llm
 
 SADECE bir kelime dondur (agent adi), baska hicbir sey yazma.
 """
@@ -59,7 +67,7 @@ class RouterAgent(BaseAgent):
         name: str,
         bus: Any,
         model: str | None = None,
-        default_agent: str = "researcher",
+        default_agent: str = "llm",
     ) -> None:
         super().__init__(name, bus)
         self.llm = GroqLLMClient(model=model)
@@ -78,7 +86,7 @@ class RouterAgent(BaseAgent):
                 message.sender,
                 {
                     "agent": chosen,
-                    "research": chosen,  # raw icin
+                    "research": chosen,
                     "sources": [],
                     "source_count": 0,
                     "query": query,
