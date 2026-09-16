@@ -20,8 +20,10 @@ Kurallar:
 - Kodu ```python ... ``` blogu icine al
 - Sadece standart kutuphane kullan (import math, import random gibi)
 - os, sys, subprocess, requests gibi modulleri KULLANMA
-- Kodu tek basina calistirilabilir yaz
+- input() KULLANMA! (kullanici input'u yok)
+- Kodu tek basina calistirilabilir yaz, dogrudan degerler ver
 - Cikti print() ile ver
+- Ornek: fibonacci(10) gibi direkt cagir
 """
 
 
