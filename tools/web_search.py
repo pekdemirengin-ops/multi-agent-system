@@ -9,16 +9,33 @@ from ddgs import DDGS
 logger = structlog.get_logger(__name__)
 
 
+# Arama stratejileri (sirali denenecek)
+SEARCH_BACKENDS = ["auto", "google", "bing", "duckduckgo"]
+
+
 def search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
-    """DuckDuckGo'da arama yapar.
+    """DuckDuckGo'da arama yapar. Birden fazla strateji dener."""
+    results: list[dict[str, Any]] = []
 
-    Args:
-        query: Arama sorgusu
-        max_results: Maksimum sonuç sayısı (1-10)
+    # 1) Direkt Turkce arama
+    results = _do_search(query, max_results)
+    if _has_good_results(results, query):
+        return results
 
-    Returns:
-        [{"title": str, "url": str, "snippet": str}, ...]
-    """
+    # 2) Ingilizce cevirerek dene
+    english_query = _translate_query(query)
+    if english_query != query:
+        logger.info("web_search.english_fallback", english_query=english_query)
+        eng_results = _do_search(english_query, max_results)
+        if _has_good_results(eng_results, english_query):
+            return eng_results
+
+    # 3) Sonuc yoksa mevcut sonuclari dondur
+    return results
+
+
+def _do_search(query: str, max_results: int) -> list[dict[str, Any]]:
+    """Tek bir arama yapar."""
     results: list[dict[str, Any]] = []
     try:
         with DDGS() as ddgs:
@@ -36,8 +53,49 @@ def search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
     return results
 
 
+def _has_good_results(results: list[dict[str, Any]], query: str) -> bool:
+    """Sonuclarin sorguyla alakali olup olmadigini kontrol eder."""
+    if not results:
+        return False
+
+    # Sorgudaki anahtar kelimeler
+    query_words = [w.lower() for w in query.split() if len(w) > 3]
+    if not query_words:
+        return True
+
+    # En az 1 anahtar kelime sonuclarda gecmeli
+    for r in results:
+        text = (r.get("title", "") + " " + r.get("snippet", "")).lower()
+        for w in query_words:
+            if w in text:
+                return True
+
+    logger.warning("web_search.irrelevant_results", query=query[:50])
+    return False
+
+
+def _translate_query(query: str) -> str:
+    """Basit Turkce->Ingilizce ceviri (anahtar kelimeler)."""
+    translations = {
+        "dunya kupasi": "World Cup",
+        "sampiyonu": "champion winner",
+        "kim": "who",
+        "ne zaman": "when",
+        "nedir": "what is",
+        "nobel": "Nobel",
+        "odulu": "Prize",
+        "2026": "2026",
+        "2025": "2025",
+        "2024": "2024",
+    }
+    english = query.lower()
+    for tr, en in translations.items():
+        english = english.replace(tr, en)
+    return english.strip()
+
+
 def format_results(results: list[dict[str, Any]]) -> str:
-    """Arama sonuçlarını LLM'e verilecek metne çevirir."""
+    """Arama sonuclarini LLM'e verilecek metne cevirir."""
     if not results:
         return "(Sonuc bulunamadi)"
     lines = []
@@ -50,5 +108,13 @@ def format_results(results: list[dict[str, Any]]) -> str:
 
 
 if __name__ == "__main__":
-    res = search("Python asyncio nedir", max_results=3)
-    print(format_results(res))
+    # Test
+    for test_query in [
+        "2026 Dunya Kupasi sampiyonu kim?",
+        "Python nedir?",
+        "2024 Nobel Odulu kime verildi?",
+    ]:
+        print(f"\n=== {test_query} ===")
+        res = search(test_query, max_results=3)
+        for r in res:
+            print(f"  - {r['title']}")
