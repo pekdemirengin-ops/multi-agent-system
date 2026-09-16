@@ -7,7 +7,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import agents, health
+from api.routes import agents, health, ws
 
 logger = structlog.get_logger(__name__)
 
@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Multi-Agent System API",
-    description="Moduler multi-agent sistemi icin REST API",
+    description="Moduler multi-agent sistemi icin REST + WebSocket API",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -36,6 +36,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(agents.router)
+app.include_router(ws.router)
 
 
 @app.get("/", tags=["root"])
@@ -45,4 +46,5 @@ async def root():
         "version": "0.1.0",
         "docs": "/docs",
         "agents_endpoint": "/api/agents",
+        "websocket": "ws://localhost:8000/ws/ask",
     }

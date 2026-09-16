@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-Agent WebSocket Testi</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+        h1 { color: #333; }
+        #log { background: #f5f5f5; border-radius: 8px; padding: 20px; min-height: 300px; font-family: monospace; white-space: pre-wrap; }
+        #input-row { display: flex; gap: 10px; margin-bottom: 20px; }
+        #message { flex: 1; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
+        #agent { padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
+        button { padding: 12px 24px; font-size: 16px; background: #0070f3; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        button:hover { background: #0051cc; }
+        button:disabled { background: #999; cursor: not-allowed; }
+        .chunk { color: #333; }
+        .sources { color: #666; font-size: 14px; margin-top: 10px; }
+        .error { color: #d00; }
+        .status { color: #0070f3; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h1>Multi-Agent WebSocket Testi</h1>
+
+    <div id="input-row">
+        <input id="message" type="text" placeholder="Sorunuzu yazin..." value="Python nedir?">
+        <select id="agent">
+            <option value="researcher">researcher</option>
+            <option value="llm">llm</option>
+        </select>
+        <button id="send">Sor</button>
+    </div>
+
+    <div id="log"></div>
+
+    <script>
+        let ws = null;
+        const log = document.getElementById('log');
+        const btn = document.getElementById('send');
+
+        function append(text, cls = 'chunk') {
+            const span = document.createElement('span');
+            span.className = cls;
+            span.textContent = text;
+            log.appendChild(span);
+        }
+
+        function connect() {
+            ws = new WebSocket('ws://localhost:8000/ws/ask');
+
+            ws.onopen = () => console.log('WebSocket bagli');
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'start') {
+                    log.innerHTML = '';
+                    append('Soru: ' + data.message + '\n', 'status');
+                    append('Agent: ' + data.agent + '\n\n', 'status');
+                } else if (data.type === 'chunk') {
+                    append(data.content, 'chunk');
+                } else if (data.type === 'sources') {
+                    append('\n\nKaynaklar:\n', 'sources');
+                    data.sources.forEach((s, i) => {
+                        append((i + 1) + '. ' + s.title + '\n   ' + s.url + '\n', 'sources');
+                    });
+                } else if (data.type === 'done') {
+                    append('\n\nTamamlandi.\n', 'status');
+                    btn.disabled = false;
+                } else if (data.type === 'error') {
+                    append('\nHata: ' + data.error + '\n', 'error');
+                    btn.disabled = false;
+                }
+            };
+
+            ws.onclose = () => console.log('WebSocket kapandi');
+            ws.onerror = (err) => console.error('WebSocket hatasi:', err);
+        }
+
+        btn.onclick = () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                connect();
+                setTimeout(() => btn.click(), 500);
+                return;
+            }
+            const message = document.getElementById('message').value;
+            const agent = document.getElementById('agent').value;
+            btn.disabled = true;
+            ws.send(JSON.stringify({ message, agent }));
+        };
+
+        connect();
+    </script>
+</body>
+</html>
