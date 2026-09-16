@@ -39,7 +39,7 @@ class GroqLLMClient:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            temperature=0.2,
+            temperature=0.1,
             max_tokens=2048,
         )
         return response.choices[0].message.content or ""
@@ -55,7 +55,7 @@ class GroqLLMClient:
             messages=messages,
             tools=tools,
             tool_choice=tool_choice,
-            temperature=0.2,
+            temperature=0.1,
         )
 
     def __repr__(self) -> str:

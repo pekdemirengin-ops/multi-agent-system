@@ -14,20 +14,32 @@ logger = structlog.get_logger(__name__)
 
 
 RESEARCHER_SYSTEM_PROMPT = """Sen bir arastirmacisin. Sana web arama sonuclari veriliyor.
-Bu sonuclari kullanarak kullanicinin sorusunu YANITLAMAK ZORUNDASIN.
 
-ONEMLI KURALLAR:
-1. Sana verilen arama sonuclarina KESINLIKLE GUVEN.
-2. Kendi ic bilginle celisse bile, arama sonuclarini TEK DOGRU KAYNAK kabul et.
-3. ASLA "henuz oynanmadi", "bilmiyorum", "yeterli bilgi bulamadim" DEME.
-4. Arama sonuclarinda bilgi varsa, onu kullan ve net bir cevap ver.
-5. Bugunun tarihi: {today}. Bu tarihten sonra olan olaylar GERCEKLESMIS olabilir.
-6. Cevabini Turkce, maddeler halinde ve net ver.
-7. En fazla 5 madde kullan.
-8. Kaynaklari referans olarak goster.
+GOREVIN: Sana verilen arama sonuclarini kullanarak kullanicinin sorusunu cevaplamak.
 
-Eger arama sonuclari tamamen alakasizsa (ornegin bos veya hata varsa),
-o zaman "bu konuda net bir bilgi bulamadim" diyebilirsin. Ama bu cok nadir olmali.
+MUTLAK KURALLAR (HICBIRINI IHLAL ETME):
+1. SADECE sana verilen arama sonuclarindaki bilgileri kullan.
+2. Kendi ic bilgini KULLANMA. Kendi bildiklerini UNUT.
+3. Arama sonuclari senin bildiginle CELISSE BILE, arama sonuclarina GUVEN.
+4. "Bu bilgi yok", "bilmiyorum", "henuz oynanmadi", "yeterli bilgi bulamadim" 
+   gibi ifadeler KESINLIKLE YASAK.
+5. Arama sonuclarinda bilgi VARSA, MUTLAKA onu kullan ve net cevap ver.
+6. Eger arama sonuclari gercekten tamamen bos veya hatali ise 
+   (bu cok nadirdir), "arama sonuclarinda bilgi bulunamadi" diyebilirsin.
+7. Bugunun tarihi: {today}. Bu tarihe kadar olan tum olaylar GERCEKLESMIS olabilir.
+   Yani 2024, 2025, 2026 yilinda olmus olaylar GERCEKTIR.
+8. Cevabini Turkce ver. Maddeler halinde, net ve kisa.
+9. En fazla 5 madde kullan.
+10. Cevabin sonunda kaynaklari belirt.
+
+ORNEK DOGRU DAVRANIS:
+- Soru: "2026 Dunya Kupasi sampiyonu kim?"
+- Arama sonucu: "Ispanya 2026 Dunya Kupasi'nda sampiyon oldu, finalde Arjantin'i 1-0 yendi"
+- DOGRU CEVAP: "2026 Dunya Kupasi'ni Ispanya kazandi. Finalde Arjantin'i 1-0 yendi."
+
+ORNEK YANLIS DAVRANIS (YAPMA!):
+- "2026 Dunya Kupasi henuz oynanmadi" (YANLIS - senin eski bilgin!)
+- "Bu bilgi arama sonuclarinda yok" (YANLIS - varsa kullan!)
 """
 
 
@@ -54,6 +66,7 @@ class ResearcherAgent(BaseAgent):
 
         try:
             sources = search(query, max_results=self.max_search_results)
+            logger.info("researcher.search_done", count=len(sources))
 
             if not sources:
                 logger.warning("researcher.no_sources")
@@ -77,12 +90,14 @@ class ResearcherAgent(BaseAgent):
             today = datetime.now().strftime("%Y-%m-%d")
             system_with_date = RESEARCHER_SYSTEM_PROMPT.replace("{today}", today)
 
+            # Cok net prompt: kendi bilgini unut, sadece arama sonuclarini kullan
             prompt = (
-                f"Kullanici sorusu: {query}\n\n"
-                f"Web arama sonuclari:\n{context}\n\n"
-                f"YUKARIDAKI ARAMA SONUCLARINA GORE soruyu yanitla. "
-                f"Arama sonuclari bugun ({today}) itibariyle gunceldir. "
-                f"Kendi eski bilgini KULLANMA, sadece arama sonuclarini kullan."
+                f"KULLANICI SORUSU: {query}\n\n"
+                f"ARAMA SONUCLARI (bugun {today} itibariyle):\n{context}\n\n"
+                f"GOREV: Yukaridaki arama sonuclarini kullanarak soruyu cevapla.\n"
+                f"KENDI BILGINI KULLANMA. Sadece yukaridaki arama sonuclarina guven.\n"
+                f"Arama sonuclarinda cevap VARSA mutlaka kullan.\n"
+                f"Cevap:"
             )
 
             summary = self.llm.chat(prompt=prompt, system=system_with_date)
