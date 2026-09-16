@@ -291,17 +291,17 @@ if (!ttsEnabled) stopSpeaking();
 const SPEECH_CORRECTIONS = [
 [/\bfayton\b/gi, "python"],
 [/\bpiton\b/gi, "python"],
-[/\bpayt[Ã„Â±i]n\b/gi, "python"],
-[/\bfayt[Ã„Â±i]n\b/gi, "python"],
+[/\bpayt[ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±i]n\b/gi, "python"],
+[/\bfayt[ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±i]n\b/gi, "python"],
 [/\bcava\s*skript\b/gi, "javascript"],
 [/\bjava\s*skript\b/gi, "javascript"],
 [/\bcavaskript\b/gi, "javascript"],
 [/\bfibonachi\b/gi, "fibonacci"],
-[/\bfibona[ÃƒÂ§c]i\b/gi, "fibonacci"],
+[/\bfibona[ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§c]i\b/gi, "fibonacci"],
 [/\bsitem\b/gi, "system"],
 [/\bsistem\b/gi, "system"],
 [/\bsamari[sz]er\b/gi, "summarizer"],
-[/\bara[Ã…Å¸s]t[Ã„Â±i]r\b/gi, "arastir"],
+[/\bara[ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸s]t[ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±i]r\b/gi, "arastir"],
 [/\bne\s*dir\b/gi, "nedir"],
 [/\bmeraba\b/gi, "merhaba"],
 ];
@@ -421,11 +421,22 @@ text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 return text;
 }
 
-function addMessage(text, role, sources) {
+function addMessage(text, role, sources, label) {
 const div = document.createElement("div");
 div.className = `message ${role}`;
 if (role === "assistant") {
-div.innerHTML = formatMarkdown(text);
+if (label) {
+const labelSpan = document.createElement("div");
+labelSpan.style.fontSize = "11px";
+labelSpan.style.opacity = "0.7";
+labelSpan.style.marginBottom = "6px";
+labelSpan.style.fontWeight = "600";
+labelSpan.textContent = label;
+div.appendChild(labelSpan);
+}
+const contentDiv = document.createElement("div");
+contentDiv.innerHTML = formatMarkdown(text);
+div.appendChild(contentDiv);
 if (sources && sources.length > 0) {
 const sdiv = document.createElement("div");
 sdiv.className = "sources";
@@ -439,7 +450,11 @@ sdiv.appendChild(a);
 });
 div.appendChild(sdiv);
 }
-} else { div.textContent = text; }
+} else {
+const contentDiv = document.createElement("div");
+contentDiv.textContent = text;
+div.appendChild(contentDiv);
+}
 chat.appendChild(div);
 chat.scrollTop = chat.scrollHeight;
 }
@@ -478,7 +493,13 @@ addMessage(msg, "assistant");
 speak(msg);
 } else {
 const data = await res.json();
-addMessage(data.answer, "assistant", data.sources);
+let agentLabel = '';
+if (data.agent && currentAgent === 'auto') {
+  const icons = {llm: 'LLM', researcher: 'RESEARCHER', coder: 'CODER', system: 'SYSTEM', summarizer: 'SUMMARIZER', reviewer: 'REVIEWER', planner: 'PLANNER'};
+  const agentName = icons[data.agent] || data.agent.toUpperCase();
+  agentLabel = '>> ' + agentName + ' tarafindan';
+}
+addMessage(data.answer, "assistant", data.sources, agentLabel);
 speak(data.answer);
 }
 } catch (e) {

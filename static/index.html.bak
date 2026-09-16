@@ -9,16 +9,45 @@
 body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+
+/* LOGIN SCREEN */
+.login-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.login-box { background: white; border-radius: 20px; padding: 40px;
+box-shadow: 0 20px 60px rgba(0,0,0,0.3); width: 100%; max-width: 400px; }
+.login-box h1 { color: #333; margin-bottom: 8px; font-size: 24px; }
+.login-box p { color: #888; margin-bottom: 24px; font-size: 14px; }
+.login-box input { width: 100%; padding: 14px 18px; border: 2px solid #e5e5ea;
+border-radius: 12px; font-size: 15px; margin-bottom: 12px; outline: none; }
+.login-box input:focus { border-color: #667eea; }
+.login-box button { width: 100%; padding: 14px; background: #667eea; color: white;
+border: none; border-radius: 12px; font-size: 15px; font-weight: 600;
+cursor: pointer; margin-bottom: 12px; }
+.login-box button:hover { background: #5568d3; }
+.login-box button:disabled { background: #ccc; cursor: not-allowed; }
+.login-box .error { color: #ef4444; font-size: 13px; margin-bottom: 12px; min-height: 18px; }
+.login-box .hint { color: #888; font-size: 12px; text-align: center; }
+.login-box .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+.login-box .tabs button { flex: 1; padding: 10px; background: #f0f0f5; color: #555;
+border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
+.login-box .tabs button.active { background: #667eea; color: white; }
+
+/* MAIN APP */
 .container { background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-width: 100%; max-width: 900px; height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+width: 100%; max-width: 900px; height: 90vh; display: flex; flex-direction: column;
+overflow: hidden; display: none; }
+.container.visible { display: flex; }
 header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-color: white; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; }
-header h1 { font-size: 22px; margin-bottom: 2px; }
-header p { opacity: 0.9; font-size: 13px; }
+color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; }
+header h1 { font-size: 20px; margin-bottom: 2px; }
+header p { opacity: 0.9; font-size: 12px; }
+.header-controls { display: flex; gap: 6px; align-items: center; }
 .header-btn { background: rgba(255,255,255,0.2); border: none; color: white;
-padding: 8px 14px; border-radius: 20px; cursor: pointer; font-size: 16px; }
+padding: 6px 12px; border-radius: 16px; cursor: pointer; font-size: 12px; font-weight: 600; }
 .header-btn.active { background: rgba(255,255,255,0.4); }
-.agents-bar { display: flex; gap: 8px; padding: 14px 20px; background: #f7f7fa;
+.user-info { font-size: 12px; opacity: 0.9; margin-right: 6px; }
+.agents-bar { display: flex; gap: 8px; padding: 12px 16px; background: #f7f7fa;
 overflow-x: auto; border-bottom: 1px solid #e5e5ea; }
 .agent-btn { padding: 8px 16px; border: 2px solid #e5e5ea; background: white;
 border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 500;
@@ -39,21 +68,22 @@ border-radius: 4px; font-family: monospace; font-size: 13px; }
 .sources { margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 12px; }
 .sources a { display: block; color: #667eea; text-decoration: none;
 margin: 3px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.input-area { display: flex; gap: 10px; padding: 16px 20px; background: white;
+.input-area { display: flex; gap: 8px; padding: 14px 16px; background: white;
 border-top: 1px solid #e5e5ea; align-items: center; }
-input[type="text"] { flex: 1; padding: 14px 18px; border: 2px solid #e5e5ea;
+input[type="text"] { flex: 1; padding: 12px 16px; border: 2px solid #e5e5ea;
 border-radius: 24px; font-size: 15px; outline: none; }
 input[type="text"]:focus { border-color: #667eea; }
-button.mic { width: 50px; height: 50px; border-radius: 50%; background: #f0f0f5;
-border: 2px solid #e5e5ea; cursor: pointer; font-size: 22px;
+button.mic { width: 48px; height: 48px; border-radius: 50%; background: #f0f0f5;
+border: 2px solid #e5e5ea; cursor: pointer; font-size: 12px;
+font-weight: 700; color: #555;
 display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 button.mic.listening { background: #ef4444; border-color: #ef4444;
-animation: pulse 1s infinite; }
+color: white; animation: pulse 1s infinite; }
 @keyframes pulse {
 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
 50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); } }
-button.send { padding: 14px 24px; background: #667eea; color: white;
-border: none; border-radius: 24px; font-size: 15px; font-weight: 600;
+button.send { padding: 12px 20px; background: #667eea; color: white;
+border: none; border-radius: 24px; font-size: 14px; font-weight: 600;
 cursor: pointer; flex-shrink: 0; }
 button.send:disabled { background: #ccc; cursor: not-allowed; }
 .status { font-size: 12px; color: #888; padding: 4px 20px 0; min-height: 18px; }
@@ -62,18 +92,49 @@ background: #4ade80; margin-right: 6px; }
 @media (max-width: 600px) {
 .container { height: 100vh; border-radius: 0; }
 body { padding: 0; }
-header h1 { font-size: 18px; }
-.message { max-width: 90%; font-size: 14px; } }
+header h1 { font-size: 16px; }
+header p { font-size: 11px; }
+.message { max-width: 90%; font-size: 14px; }
+.input-area { padding: 10px 12px; gap: 6px; }
+input[type="text"] { padding: 10px 14px; font-size: 14px; }
+button.mic { width: 42px; height: 42px; font-size: 11px; }
+button.send { padding: 10px 14px; font-size: 13px; }
+}
 </style>
 </head>
 <body>
-<div class="container">
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+<div class="login-box">
+<h1>Multi-Agent System</h1>
+<p>Giris yap veya yeni hesap olustur</p>
+
+<div class="tabs">
+<button class="active" id="tabLogin" onclick="switchTab('login')">Giris</button>
+<button id="tabRegister" onclick="switchTab('register')">Kayit</button>
+</div>
+
+<input type="text" id="username" placeholder="Kullanici adi" autocomplete="username">
+<input type="password" id="password" placeholder="Sifre" autocomplete="current-password">
+<div class="error" id="loginError"></div>
+<button id="submitBtn" onclick="submitAuth()">Giris Yap</button>
+<p class="hint">Varsayilan: admin / admin123</p>
+</div>
+</div>
+
+<!-- MAIN APP -->
+<div class="container" id="mainApp">
 <header>
 <div>
 <h1>Multi-Agent System</h1>
-<p>Sesli kullanim: mikrofon butonuna bas</p>
+<p>Sesli: MIC | Yaz veya konus</p>
 </div>
-<button class="header-btn active" id="ttsToggle" title="Sesli okuma">🔊</button>
+<div class="header-controls">
+<span class="user-info" id="userInfo">admin</span>
+<button class="header-btn active" id="ttsToggle" title="Sesli okuma">SES</button>
+<button class="header-btn" onclick="logout()" title="Cikis">Cikis</button>
+</div>
 </header>
 <div class="agents-bar" id="agentsBar"></div>
 <div class="status">
@@ -82,29 +143,26 @@ header h1 { font-size: 18px; }
 </div>
 <div class="chat" id="chat">
 <div class="message assistant">
-Multi-Agent System'e hos geldiniz!
-
-Sesli kullanim:
-1. Mikrofon butonuna bas
-2. Sorunuzu soyleyin
-3. Otomatik yaziya cevrilecek
-4. Gonder'e bas
-5. Cevabi dinleyin
+Hos geldin! MIC ile konus, yaz veya agent sec.
 </div>
 </div>
 <div class="input-area">
-<button class="mic" id="micBtn" title="Konusmak icin bas">🎤</button>
-<input type="text" id="messageInput" placeholder="Yazin veya mikrofonu kullanin..." autocomplete="off">
+<button class="mic" id="micBtn" title="Konusmak icin bas">MIC</button>
+<input type="text" id="messageInput" placeholder="Yazin veya MIC kullanin..." autocomplete="off">
 <button class="send" id="sendBtn">Gonder</button>
 </div>
 </div>
+
 <script>
 const API_BASE = window.location.origin;
-let currentAgent = "researcher";
+let currentAgent = "auto";
 let isProcessing = false;
 let ttsEnabled = true;
 let recognition = null;
 let isListening = false;
+let token = localStorage.getItem("token") || null;
+let currentUser = localStorage.getItem("username") || null;
+let authMode = "login";
 
 const chat = document.getElementById("chat");
 const messageInput = document.getElementById("messageInput");
@@ -113,7 +171,100 @@ const micBtn = document.getElementById("micBtn");
 const agentsBar = document.getElementById("agentsBar");
 const statusText = document.getElementById("statusText");
 const ttsToggle = document.getElementById("ttsToggle");
+const loginScreen = document.getElementById("loginScreen");
+const mainApp = document.getElementById("mainApp");
+const userInfo = document.getElementById("userInfo");
+const loginError = document.getElementById("loginError");
+const submitBtn = document.getElementById("submitBtn");
 
+// ============================================================
+// AUTH
+// ============================================================
+function switchTab(mode) {
+authMode = mode;
+document.getElementById("tabLogin").classList.toggle("active", mode === "login");
+document.getElementById("tabRegister").classList.toggle("active", mode === "register");
+submitBtn.textContent = mode === "login" ? "Giris Yap" : "Kayit Ol";
+loginError.textContent = "";
+}
+
+async function submitAuth() {
+const username = document.getElementById("username").value.trim();
+const password = document.getElementById("password").value;
+
+if (!username || !password) {
+loginError.textContent = "Kullanici adi ve sifre gerekli";
+return;
+}
+if (password.length < 6) {
+loginError.textContent = "Sifre en az 6 karakter olmali";
+return;
+}
+
+submitBtn.disabled = true;
+submitBtn.textContent = "Bekleniyor...";
+loginError.textContent = "";
+
+try {
+const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+const res = await fetch(`${API_BASE}${endpoint}`, {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({ username, password })
+});
+
+if (!res.ok) {
+const err = await res.json();
+loginError.textContent = err.detail || "Hata";
+submitBtn.disabled = false;
+submitBtn.textContent = authMode === "login" ? "Giris Yap" : "Kayit Ol";
+return;
+}
+
+const data = await res.json();
+token = data.access_token;
+currentUser = data.username;
+localStorage.setItem("token", token);
+localStorage.setItem("username", currentUser);
+showMainApp();
+} catch (e) {
+loginError.textContent = "Baglanti hatasi: " + e.message;
+submitBtn.disabled = false;
+submitBtn.textContent = authMode === "login" ? "Giris Yap" : "Kayit Ol";
+}
+}
+
+function showMainApp() {
+loginScreen.style.display = "none";
+mainApp.classList.add("visible");
+userInfo.textContent = currentUser;
+loadAgents();
+loadHistory();
+messageInput.focus();
+}
+
+function logout() {
+localStorage.removeItem("token");
+localStorage.removeItem("username");
+token = null;
+currentUser = null;
+location.reload();
+}
+
+function authHeaders() {
+const h = { "Content-Type": "application/json" };
+if (token) h["Authorization"] = "Bearer " + token;
+return h;
+}
+
+// Enter ile login
+document.getElementById("password").addEventListener("keypress", (e) => {
+if (e.key === "Enter") submitAuth();
+});
+
+// ============================================================
+// TTS
+// ============================================================
 function speak(text) {
 if (!ttsEnabled || !("speechSynthesis" in window)) return;
 window.speechSynthesis.cancel();
@@ -134,32 +285,69 @@ ttsToggle.classList.toggle("active", ttsEnabled);
 if (!ttsEnabled) stopSpeaking();
 };
 
+// ============================================================
+// SPEECH CORRECTIONS
+// ============================================================
+const SPEECH_CORRECTIONS = [
+[/\bfayton\b/gi, "python"],
+[/\bpiton\b/gi, "python"],
+[/\bpayt[Ã„Â±i]n\b/gi, "python"],
+[/\bfayt[Ã„Â±i]n\b/gi, "python"],
+[/\bcava\s*skript\b/gi, "javascript"],
+[/\bjava\s*skript\b/gi, "javascript"],
+[/\bcavaskript\b/gi, "javascript"],
+[/\bfibonachi\b/gi, "fibonacci"],
+[/\bfibona[ÃƒÂ§c]i\b/gi, "fibonacci"],
+[/\bsitem\b/gi, "system"],
+[/\bsistem\b/gi, "system"],
+[/\bsamari[sz]er\b/gi, "summarizer"],
+[/\bara[Ã…Å¸s]t[Ã„Â±i]r\b/gi, "arastir"],
+[/\bne\s*dir\b/gi, "nedir"],
+[/\bmeraba\b/gi, "merhaba"],
+];
+
+function correctSpeech(text) {
+let corrected = text;
+for (const [pattern, replacement] of SPEECH_CORRECTIONS) {
+corrected = corrected.replace(pattern, replacement);
+}
+return corrected;
+}
+
+// ============================================================
+// STT
+// ============================================================
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
 recognition = new SpeechRecognition();
 recognition.lang = "tr-TR";
 recognition.continuous = false;
 recognition.interimResults = true;
+
 recognition.onstart = () => {
 isListening = true;
 micBtn.classList.add("listening");
 statusText.textContent = "Dinliyorum...";
 stopSpeaking();
 };
+
 recognition.onresult = (event) => {
 let finalText = "";
 let interimText = "";
 for (let i = event.resultIndex; i < event.results.length; i++) {
-const transcript = event.results[i][0].transcript;
-if (event.results[i].isFinal) finalText += transcript;
-else interimText += transcript;
+const t = event.results[i][0].transcript;
+if (event.results[i].isFinal) finalText += t;
+else interimText += t;
 }
-messageInput.value = finalText || interimText;
 if (finalText) {
+messageInput.value = correctSpeech(finalText);
 statusText.textContent = "Algilandi, gonderiliyor...";
-setTimeout(() => { if (messageInput.value.trim()) sendMessage(); }, 400);
+setTimeout(() => { if (messageInput.value.trim()) sendMessage(); }, 600);
+} else {
+messageInput.value = interimText;
 }
 };
+
 recognition.onerror = (event) => {
 isListening = false;
 micBtn.classList.remove("listening");
@@ -168,28 +356,43 @@ else if (event.error === "no-speech") statusText.textContent = "Ses algilanamadi
 else statusText.textContent = "Hata: " + event.error;
 setTimeout(() => { statusText.textContent = "Hazir"; }, 2000);
 };
+
 recognition.onend = () => {
 isListening = false;
 micBtn.classList.remove("listening");
 if (statusText.textContent === "Dinliyorum...") statusText.textContent = "Hazir";
 };
+
 micBtn.onclick = () => {
 if (isListening) recognition.stop();
 else { stopSpeaking(); try { recognition.start(); } catch (e) { console.error(e); } }
 };
 } else {
 micBtn.style.display = "none";
-statusText.textContent = "Tarayici konusma tanimayi desteklemiyor";
+statusText.textContent = "Tarayici ses tanimayi desteklemiyor";
 }
 
+// ============================================================
+// AGENTS
+// ============================================================
 async function loadAgents() {
 try {
 const res = await fetch(`${API_BASE}/api/agents`);
 const data = await res.json();
 agentsBar.innerHTML = "";
+const autoBtn = document.createElement("button");
+autoBtn.className = "agent-btn active";
+autoBtn.textContent = "Auto";
+autoBtn.onclick = () => {
+currentAgent = "auto";
+document.querySelectorAll(".agent-btn").forEach((b) => b.classList.remove("active"));
+autoBtn.classList.add("active");
+};
+agentsBar.appendChild(autoBtn);
 data.agents.forEach((agent) => {
+if (agent.name === "router") return;
 const btn = document.createElement("button");
-btn.className = "agent-btn" + (agent.name === currentAgent ? " active" : "");
+btn.className = "agent-btn";
 btn.textContent = agent.name;
 btn.onclick = () => {
 currentAgent = agent.name;
@@ -198,10 +401,13 @@ btn.classList.add("active");
 };
 agentsBar.appendChild(btn);
 });
-statusText.textContent = `${data.count} agent hazir`;
+statusText.textContent = "Hazir - " + data.count + " agent";
 } catch (e) { statusText.textContent = "Baglanti hatasi"; }
 }
 
+// ============================================================
+// MESSAGE
+// ============================================================
 function escapeHtml(text) {
 const div = document.createElement("div");
 div.textContent = text;
@@ -221,17 +427,17 @@ div.className = `message ${role}`;
 if (role === "assistant") {
 div.innerHTML = formatMarkdown(text);
 if (sources && sources.length > 0) {
-const sourcesDiv = document.createElement("div");
-sourcesDiv.className = "sources";
-sourcesDiv.innerHTML = "<strong>Kaynaklar:</strong>";
+const sdiv = document.createElement("div");
+sdiv.className = "sources";
+sdiv.innerHTML = "<strong>Kaynaklar:</strong>";
 sources.forEach((s, i) => {
 const a = document.createElement("a");
 a.href = s.url;
 a.target = "_blank";
 a.textContent = `${i + 1}. ${s.title}`;
-sourcesDiv.appendChild(a);
+sdiv.appendChild(a);
 });
-div.appendChild(sourcesDiv);
+div.appendChild(sdiv);
 }
 } else { div.textContent = text; }
 chat.appendChild(div);
@@ -246,21 +452,28 @@ sendBtn.disabled = true;
 stopSpeaking();
 messageInput.value = "";
 addMessage(message, "user");
+
 const loadingDiv = document.createElement("div");
 loadingDiv.className = "message assistant";
 loadingDiv.textContent = "Dusunuyor...";
 chat.appendChild(loadingDiv);
 chat.scrollTop = chat.scrollHeight;
+
 try {
 const res = await fetch(`${API_BASE}/api/ask`, {
 method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ message, agent: currentAgent, timeout: 60 })
+headers: authHeaders(),
+body: JSON.stringify({
+message: message,
+agent: currentAgent,
+timeout: 60,
+user_id: currentUser || "default"
+})
 });
 loadingDiv.remove();
 if (!res.ok) {
 const err = await res.json();
-const msg = `Hata: ${err.detail || "Bilinmeyen hata"}`;
+const msg = "Hata: " + (err.detail || "Bilinmeyen");
 addMessage(msg, "assistant");
 speak(msg);
 } else {
@@ -270,7 +483,7 @@ speak(data.answer);
 }
 } catch (e) {
 loadingDiv.remove();
-const msg = `Baglanti hatasi: ${e.message}`;
+const msg = "Baglanti hatasi: " + e.message;
 addMessage(msg, "assistant");
 speak(msg);
 } finally {
@@ -282,12 +495,61 @@ messageInput.focus();
 
 sendBtn.onclick = sendMessage;
 messageInput.addEventListener("keypress", (e) => { if (e.key === "Enter") sendMessage(); });
-loadAgents();
-messageInput.focus();
+
+// ============================================================
+// INIT
+// ============================================================
+if (token && currentUser) {
+// Token varsa dogrula
+fetch(`${API_BASE}/api/auth/me`, { headers: authHeaders() })
+.then(r => r.ok ? r.json() : Promise.reject())
+.then(() => showMainApp())
+.catch(() => {
+localStorage.removeItem("token");
+localStorage.removeItem("username");
+token = null;
+currentUser = null;
+});
+}
+
 if ("speechSynthesis" in window) {
 window.speechSynthesis.getVoices();
 window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 }
+
+async function loadHistory() {
+    if (!currentUser) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/memory/${currentUser}?limit=50`, {
+            headers: authHeaders()
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.messages || data.messages.length === 0) return;
+
+        chat.innerHTML = "";
+
+        data.messages.forEach(msg => {
+            if (msg.role === "user") {
+                addMessage(msg.content, "user");
+            } else if (msg.role === "assistant") {
+                addMessage(msg.content, "assistant", msg.sources || []);
+            }
+        });
+
+        const info = document.createElement("div");
+        info.className = "message assistant";
+        info.style.fontSize = "12px";
+        info.style.opacity = "0.6";
+        info.textContent = "--- " + data.count + " eski mesaj yuklendi ---";
+        chat.appendChild(info);
+        chat.scrollTop = chat.scrollHeight;
+
+    } catch (e) {
+        console.error("History load error:", e);
+    }
+}
+
 </script>
 </body>
 </html>

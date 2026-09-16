@@ -170,11 +170,16 @@ async def ask(
     chosen_agent = req.agent
     router_used = False
 
+    router_method = None
+    router_duration_ms = None
+
     if req.agent == "auto":
         router_used = True
         router_result = await _run_single_agent("router", req.message, timeout=15)
         if isinstance(router_result, dict):
             chosen_agent = router_result.get("agent", "llm")
+            router_method = router_result.get("router_method")
+            router_duration_ms = router_result.get("router_duration_ms")
         else:
             chosen_agent = "llm"
 
@@ -216,6 +221,10 @@ async def ask(
                 raw={
                     "bus": _bus_type,
                     "router_used": router_used,
+                    "router_method": router_method,
+                    "router_duration_ms": router_duration_ms,
+                    "router_method": router_result.get("router_method") if router_used and isinstance(router_result, dict) else None,
+                    "router_duration_ms": router_result.get("router_duration_ms") if router_used and isinstance(router_result, dict) else None,
                     "has_history": bool(history_text),
                     "authenticated": bool(authenticated_user),
                     "rate_limit_remaining": remaining,
@@ -233,6 +242,10 @@ async def ask(
                 raw={
                     "bus": _bus_type,
                     "router_used": router_used,
+                    "router_method": router_method,
+                    "router_duration_ms": router_duration_ms,
+                    "router_method": router_result.get("router_method") if router_used and isinstance(router_result, dict) else None,
+                    "router_duration_ms": router_result.get("router_duration_ms") if router_used and isinstance(router_result, dict) else None,
                     "has_history": bool(history_text),
                     "authenticated": bool(authenticated_user),
                     "rate_limit_remaining": remaining,
