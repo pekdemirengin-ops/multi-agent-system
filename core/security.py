@@ -127,4 +127,4 @@ class RateLimiter:
 
 
 # Global rate limiter (30 istek / 60 saniye)
-rate_limiter = RateLimiter(max_requests=30, window_seconds=60)
+rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
