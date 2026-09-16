@@ -25,7 +25,6 @@ COPY static/ ./static/
 
 # Data klasoru (SQLite hafiza icin)
 RUN mkdir -p /app/data
-VOLUME ["/app/data"]
 
 ENV PATH="/app/.venv/bin:$PATH"
 
