@@ -16,7 +16,7 @@ color: white; padding: 20px 24px; display: flex; justify-content: space-between;
 header h1 { font-size: 22px; margin-bottom: 2px; }
 header p { opacity: 0.9; font-size: 13px; }
 .header-btn { background: rgba(255,255,255,0.2); border: none; color: white;
-padding: 8px 14px; border-radius: 20px; cursor: pointer; font-size: 16px; }
+padding: 8px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .header-btn.active { background: rgba(255,255,255,0.4); }
 .agents-bar { display: flex; gap: 8px; padding: 14px 20px; background: #f7f7fa;
 overflow-x: auto; border-bottom: 1px solid #e5e5ea; }
@@ -45,10 +45,11 @@ input[type="text"] { flex: 1; padding: 14px 18px; border: 2px solid #e5e5ea;
 border-radius: 24px; font-size: 15px; outline: none; }
 input[type="text"]:focus { border-color: #667eea; }
 button.mic { width: 50px; height: 50px; border-radius: 50%; background: #f0f0f5;
-border: 2px solid #e5e5ea; cursor: pointer; font-size: 22px;
+border: 2px solid #e5e5ea; cursor: pointer; font-size: 12px;
+font-weight: 700; color: #555;
 display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 button.mic.listening { background: #ef4444; border-color: #ef4444;
-animation: pulse 1s infinite; }
+color: white; animation: pulse 1s infinite; }
 @keyframes pulse {
 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
 50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); } }
@@ -71,9 +72,9 @@ header h1 { font-size: 18px; }
 <header>
 <div>
 <h1>Multi-Agent System</h1>
-<p>Sesli kullanim: mikrofon butonuna bas</p>
+<p>Sesli kullanim: MIC butonuna bas</p>
 </div>
-<button class="header-btn active" id="ttsToggle" title="Sesli okuma">ğŸ”Š</button>
+<button class="header-btn active" id="ttsToggle" title="Sesli okuma">SES</button>
 </header>
 <div class="agents-bar" id="agentsBar"></div>
 <div class="status">
@@ -85,7 +86,7 @@ header h1 { font-size: 18px; }
 Multi-Agent System'e hos geldiniz!
 
 Sesli kullanim:
-1. Mikrofon butonuna bas
+1. MIC butonuna bas
 2. Sorunuzu soyleyin
 3. Otomatik yaziya cevrilecek
 4. Gonder'e bas
@@ -93,8 +94,8 @@ Sesli kullanim:
 </div>
 </div>
 <div class="input-area">
-<button class="mic" id="micBtn" title="Konusmak icin bas">ğŸ¤</button>
-<input type="text" id="messageInput" placeholder="Yazin veya mikrofonu kullanin..." autocomplete="off">
+<button class="mic" id="micBtn" title="Konusmak icin bas">MIC</button>
+<input type="text" id="messageInput" placeholder="Yazin veya MIC kullanin..." autocomplete="off">
 <button class="send" id="sendBtn">Gonder</button>
 </div>
 </div>
@@ -187,17 +188,18 @@ try {
 const res = await fetch(`${API_BASE}/api/agents`);
 const data = await res.json();
 agentsBar.innerHTML = "";
-                    const autoBtn = document.createElement("button");
-                    autoBtn.className = "agent-btn" + ("auto" === currentAgent ? " active" : "");
-                    autoBtn.textContent = "Auto";
-                    autoBtn.title = "Otomatik secim";
-                    autoBtn.onclick = () => {
-                        currentAgent = "auto";
-                        document.querySelectorAll(".agent-btn").forEach((b) => b.classList.remove("active"));
-                        autoBtn.classList.add("active");
-                    };
-                    agentsBar.appendChild(autoBtn);
+const autoBtn = document.createElement("button");
+autoBtn.className = "agent-btn" + (currentAgent === "auto" ? " active" : "");
+autoBtn.textContent = "Auto";
+autoBtn.title = "Otomatik secim";
+autoBtn.onclick = () => {
+currentAgent = "auto";
+document.querySelectorAll(".agent-btn").forEach((b) => b.classList.remove("active"));
+autoBtn.classList.add("active");
+};
+agentsBar.appendChild(autoBtn);
 data.agents.forEach((agent) => {
+if (agent.name === "router") return;
 const btn = document.createElement("button");
 btn.className = "agent-btn" + (agent.name === currentAgent ? " active" : "");
 btn.textContent = agent.name;
@@ -208,7 +210,7 @@ btn.classList.add("active");
 };
 agentsBar.appendChild(btn);
 });
-statusText.textContent = `${data.count} agent hazir`;
+statusText.textContent = "Hazir - " + data.count + " agent";
 } catch (e) { statusText.textContent = "Baglanti hatasi"; }
 }
 
