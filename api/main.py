@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import agents, health, memory, team, ws
+from api.routes import agents, health, memory, security, team, ws
 
 logger = structlog.get_logger(__name__)
 
@@ -32,11 +32,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:8000",
+    "https://multi-agent-system-production-9301.up.railway.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.railway\.app",
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 app.include_router(health.router)
@@ -44,6 +53,7 @@ app.include_router(agents.router)
 app.include_router(team.router)
 app.include_router(ws.router)
 app.include_router(memory.router)
+app.include_router(security.router)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -58,7 +68,4 @@ async def root():
         "name": "Multi-Agent System API",
         "version": "0.3.0",
         "docs": "/docs",
-        "agents_endpoint": "/api/agents",
-        "team_endpoint": "/api/team",
-        "memory_endpoint": "/api/memory/stats",
     }

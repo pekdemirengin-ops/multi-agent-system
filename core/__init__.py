@@ -5,6 +5,7 @@ from core.memory import ConversationMemory, get_memory
 from core.message_bus import MessageBus
 from core.orchestrator import Orchestrator, Plan, PlanStep
 from core.registry import AgentRegistry
+from core.security import rate_limiter, validate_message, validate_user_id
 
 __all__ = [
     "BaseAgent",
@@ -18,4 +19,7 @@ __all__ = [
     "get_settings",
     "ConversationMemory",
     "get_memory",
+    "rate_limiter",
+    "validate_message",
+    "validate_user_id",
 ]

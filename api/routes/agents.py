@@ -1,4 +1,4 @@
-"""Agent endpoint'leri (hafiza destekli)."""
+"""Agent endpoint'leri (hafiza + guvenlik destekli)."""
 from __future__ import annotations
 
 import asyncio
@@ -7,7 +7,7 @@ import uuid
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from agents.ai import (
     CoderAgent,
@@ -25,6 +25,7 @@ from core.config import get_settings
 from core.memory import get_memory
 from core.message_bus import MessageBus
 from core.redis_bus import RedisMessageBus
+from core.security import rate_limiter, validate_message, validate_user_id
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["agents"])
@@ -59,11 +60,9 @@ async def init_agents() -> None:
         _bus = RedisMessageBus(redis_url=settings.redis_url)
         await _bus.connect()
         _bus_type = "redis"
-        logger.info("api.bus_initialized", bus="redis")
     else:
         _bus = MessageBus()
         _bus_type = "in-memory"
-        logger.info("api.bus_initialized", bus="in-memory")
 
     ResponseCollector("__api_collector__", _bus)
 
@@ -81,10 +80,8 @@ async def init_agents() -> None:
         }
     )
 
-    # Hafiza baslat
     await get_memory()
-
-    logger.info("api.agents_initialized", agents=list(_agents.keys()), bus=_bus_type)
+    logger.info("api.agents_initialized", agents=list(_agents.keys()))
 
 
 def get_agent(name: str) -> BaseAgent:
@@ -129,20 +126,41 @@ async def list_agents() -> AgentsResponse:
 
 
 @router.post("/ask", response_model=AskResponse)
-async def ask(req: AskRequest) -> AskResponse:
+async def ask(req: AskRequest, request: Request) -> AskResponse:
+    # ============================================================
+    # GUVENLIK KATMANI 1: Rate Limiting (IP bazli)
+    # ============================================================
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, remaining = rate_limiter.check(client_ip)
+    if not allowed:
+        logger.warning("api.rate_limit_blocked", ip=client_ip)
+        raise HTTPException(
+            status_code=429,
+            detail="Cok fazla istek. Lutfen biraz bekleyin.",
+            headers={"Retry-After": "60"},
+        )
+
+    # ============================================================
+    # GUVENLIK KATMANI 2: Input Validation
+    # ============================================================
+    msg_valid, msg_error = validate_message(req.message)
+    if not msg_valid:
+        logger.warning("api.invalid_message", error=msg_error)
+        raise HTTPException(status_code=400, detail=f"Gecersiz mesaj: {msg_error}")
+
+    user_valid, user_error = validate_user_id(req.user_id or "default")
+    if not user_valid:
+        raise HTTPException(status_code=400, detail=f"Gecersiz user_id: {user_error}")
+
     await init_agents()
     start = time.perf_counter()
 
     memory = await get_memory()
     user_id = req.user_id or "default"
 
-    # 1) Kullanici mesajini kaydet
     await memory.save_message(user_id, "user", req.message)
-
-    # 2) Gecmisi al
     history_text = await memory.format_for_llm(user_id, limit=10)
 
-    # 3) Auto-routing
     chosen_agent = req.agent
     router_used = False
 
@@ -150,14 +168,12 @@ async def ask(req: AskRequest) -> AskResponse:
         router_used = True
         router_result = await _run_single_agent("router", req.message, timeout=15)
         if isinstance(router_result, dict):
-            chosen_agent = router_result.get("agent", "researcher")
+            chosen_agent = router_result.get("agent", "llm")
         else:
-            chosen_agent = "researcher"
-        logger.info("api.auto_routed", chosen=chosen_agent)
+            chosen_agent = "llm"
 
     get_agent(chosen_agent)
 
-    # 4) Mesaji gecmisle birlikte agent'a gonder
     if history_text:
         full_message = (
             f"{history_text}\n\n"
@@ -171,7 +187,6 @@ async def ask(req: AskRequest) -> AskResponse:
 
     duration_ms = int((time.perf_counter() - start) * 1000)
 
-    # 5) Cevabi kaydet
     if isinstance(result, dict):
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])
@@ -198,6 +213,7 @@ async def ask(req: AskRequest) -> AskResponse:
                     "bus": _bus_type,
                     "router_used": router_used,
                     "has_history": bool(history_text),
+                    "rate_limit_remaining": remaining,
                 },
             )
 
@@ -210,7 +226,12 @@ async def ask(req: AskRequest) -> AskResponse:
                 agent=chosen_agent,
                 sources=[],
                 duration_ms=duration_ms,
-                raw={"bus": _bus_type, "router_used": router_used, "has_history": bool(history_text)},
+                raw={
+                    "bus": _bus_type,
+                    "router_used": router_used,
+                    "has_history": bool(history_text),
+                    "rate_limit_remaining": remaining,
+                },
             )
 
     answer_text = str(result)
@@ -219,5 +240,10 @@ async def ask(req: AskRequest) -> AskResponse:
         answer=answer_text,
         agent=chosen_agent,
         duration_ms=duration_ms,
-        raw={"bus": _bus_type, "router_used": router_used, "has_history": bool(history_text)},
+        raw={
+            "bus": _bus_type,
+            "router_used": router_used,
+            "has_history": bool(history_text),
+            "rate_limit_remaining": remaining,
+        },
     )
