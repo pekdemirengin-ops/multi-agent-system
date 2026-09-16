@@ -1,4 +1,12 @@
 """Core katmani - tum agent'larin temeli."""
+from core.auth import (
+    create_access_token,
+    decode_token,
+    get_user_from_token,
+    hash_password,
+    user_store,
+    verify_password,
+)
 from core.base_agent import BaseAgent, Message
 from core.config import Settings, get_settings
 from core.memory import ConversationMemory, get_memory
@@ -22,4 +30,10 @@ __all__ = [
     "rate_limiter",
     "validate_message",
     "validate_user_id",
+    "create_access_token",
+    "decode_token",
+    "get_user_from_token",
+    "hash_password",
+    "verify_password",
+    "user_store",
 ]

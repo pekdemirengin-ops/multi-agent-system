@@ -1,4 +1,4 @@
-"""Agent endpoint'leri (hafiza + guvenlik destekli)."""
+"""Agent endpoint'leri (hafiza + guvenlik + auth)."""
 from __future__ import annotations
 
 import asyncio
@@ -7,7 +7,7 @@ import uuid
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from agents.ai import (
     CoderAgent,
@@ -19,6 +19,7 @@ from agents.ai import (
     SummarizerAgent,
 )
 from agents.devops import SystemAgent
+from api.routes.auth import get_optional_user
 from api.schemas import AgentInfo, AgentsResponse, AskRequest, AskResponse, Source
 from core.base_agent import BaseAgent, Message
 from core.config import get_settings
@@ -126,45 +127,45 @@ async def list_agents() -> AgentsResponse:
 
 
 @router.post("/ask", response_model=AskResponse)
-async def ask(req: AskRequest, request: Request) -> AskResponse:
-    # ============================================================
-    # GUVENLIK KATMANI 1: Rate Limiting (IP bazli)
-    # ============================================================
+async def ask(
+    req: AskRequest,
+    request: Request,
+    authenticated_user: str | None = Depends(get_optional_user),
+) -> AskResponse:
+    # Rate limiting
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         client_ip = forwarded.split(",")[0].strip()
     else:
         client_ip = request.client.host if request.client else "unknown"
-    rate_key = f"{req.user_id or 'default'}:{client_ip}"
+
+    # Authenticated user varsa onu kullan, yoksa user_id
+    effective_user = authenticated_user or req.user_id or "default"
+    rate_key = f"{effective_user}:{client_ip}"
     allowed, remaining = rate_limiter.check(rate_key)
     if not allowed:
-        logger.warning("api.rate_limit_blocked", ip=client_ip)
+        logger.warning("api.rate_limit_blocked", user=effective_user)
         raise HTTPException(
             status_code=429,
             detail="Cok fazla istek. Lutfen biraz bekleyin.",
             headers={"Retry-After": "60"},
         )
 
-    # ============================================================
-    # GUVENLIK KATMANI 2: Input Validation
-    # ============================================================
+    # Input validation
     msg_valid, msg_error = validate_message(req.message)
     if not msg_valid:
-        logger.warning("api.invalid_message", error=msg_error)
         raise HTTPException(status_code=400, detail=f"Gecersiz mesaj: {msg_error}")
 
-    user_valid, user_error = validate_user_id(req.user_id or "default")
+    user_valid, user_error = validate_user_id(effective_user)
     if not user_valid:
-        raise HTTPException(status_code=400, detail=f"Gecersiz user_id: {user_error}")
+        raise HTTPException(status_code=400, detail=f"Gecersiz user: {user_error}")
 
     await init_agents()
     start = time.perf_counter()
 
     memory = await get_memory()
-    user_id = req.user_id or "default"
-
-    await memory.save_message(user_id, "user", req.message)
-    history_text = await memory.format_for_llm(user_id, limit=10)
+    await memory.save_message(effective_user, "user", req.message)
+    history_text = await memory.format_for_llm(effective_user, limit=10)
 
     chosen_agent = req.agent
     router_used = False
@@ -180,16 +181,11 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
     get_agent(chosen_agent)
 
     if history_text:
-        full_message = (
-            f"{history_text}\n\n"
-            f"---\n\n"
-            f"Kullanici simdi soruyor: {req.message}"
-        )
+        full_message = f"{history_text}\n\n---\n\nKullanici simdi soruyor: {req.message}"
     else:
         full_message = req.message
 
     result = await _run_single_agent(chosen_agent, full_message, timeout=req.timeout)
-
     duration_ms = int((time.perf_counter() - start) * 1000)
 
     if isinstance(result, dict):
@@ -202,7 +198,7 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
                 for s in result.get("sources", [])
             ]
             await memory.save_message(
-                user_id,
+                effective_user,
                 "assistant",
                 result["research"],
                 agent=chosen_agent,
@@ -214,41 +210,40 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
                 sources=sources,
                 duration_ms=duration_ms,
                 raw={
-                    "source_count": result.get("source_count", 0),
                     "bus": _bus_type,
                     "router_used": router_used,
                     "has_history": bool(history_text),
+                    "authenticated": bool(authenticated_user),
                     "rate_limit_remaining": remaining,
                 },
             )
 
         if "answer" in result:
             await memory.save_message(
-                user_id, "assistant", result["answer"], agent=chosen_agent
+                effective_user, "assistant", result["answer"], agent=chosen_agent
             )
             return AskResponse(
                 answer=result["answer"],
                 agent=chosen_agent,
-                sources=[],
                 duration_ms=duration_ms,
                 raw={
                     "bus": _bus_type,
                     "router_used": router_used,
                     "has_history": bool(history_text),
+                    "authenticated": bool(authenticated_user),
                     "rate_limit_remaining": remaining,
                 },
             )
 
     answer_text = str(result)
-    await memory.save_message(user_id, "assistant", answer_text, agent=chosen_agent)
+    await memory.save_message(effective_user, "assistant", answer_text, agent=chosen_agent)
     return AskResponse(
         answer=answer_text,
         agent=chosen_agent,
         duration_ms=duration_ms,
         raw={
             "bus": _bus_type,
-            "router_used": router_used,
-            "has_history": bool(history_text),
+            "authenticated": bool(authenticated_user),
             "rate_limit_remaining": remaining,
         },
     )

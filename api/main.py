@@ -1,4 +1,4 @@
-"""FastAPI uygulamasi - agent'lari HTTP uzerinden acar."""
+"""FastAPI uygulamasi."""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import agents, health, memory, security, team, ws
+from api.routes import agents, auth, health, memory, security, team, ws
 
 logger = structlog.get_logger(__name__)
 
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Multi-Agent System API",
     description="Moduler multi-agent sistemi icin REST + WebSocket API",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -49,6 +49,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(agents.router)
 app.include_router(team.router)
 app.include_router(ws.router)
@@ -64,8 +65,4 @@ async def root():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
-    return {
-        "name": "Multi-Agent System API",
-        "version": "0.3.0",
-        "docs": "/docs",
-    }
+    return {"name": "Multi-Agent System API", "version": "0.4.0", "docs": "/docs"}
