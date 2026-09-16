@@ -15,6 +15,7 @@ from agents.ai import (
     PlannerAgent,
     ResearcherAgent,
     ReviewerAgent,
+    RouterAgent,
     SummarizerAgent,
 )
 from agents.devops import SystemAgent
@@ -75,6 +76,7 @@ async def init_agents() -> None:
             "planner": PlannerAgent("planner", _bus),
             "reviewer": ReviewerAgent("reviewer", _bus),
             "summarizer": SummarizerAgent("summarizer", _bus),
+            "router": RouterAgent("router", _bus),
         }
     )
     logger.info("api.agents_initialized", agents=list(_agents.keys()), bus=_bus_type)
@@ -86,6 +88,31 @@ def get_agent(name: str) -> BaseAgent:
     if name not in _agents:
         raise HTTPException(status_code=404, detail=f"Agent bulunamadi: {name}")
     return _agents[name]
+
+
+async def _run_single_agent(agent_name: str, message_text: str, timeout: int) -> dict[str, Any]:
+    """Tek bir agent'a gorev gonderir ve sonucu dondurur."""
+    fid = str(uuid.uuid4())
+    loop = asyncio.get_running_loop()
+    future: asyncio.Future = loop.create_future()
+    _response_futures[fid] = future
+
+    msg = Message(
+        sender="__api_collector__",
+        receiver=agent_name,
+        content=message_text,
+        msg_type="task",
+        id=fid,
+    )
+    await _bus.publish(msg)
+
+    try:
+        result = await asyncio.wait_for(future, timeout=timeout)
+    except asyncio.TimeoutError:
+        _response_futures.pop(fid, None)
+        raise HTTPException(status_code=504, detail="Agent zaman asimina ugradi") from None
+
+    return result
 
 
 @router.get("/agents", response_model=AgentsResponse)
@@ -100,29 +127,27 @@ async def list_agents() -> AgentsResponse:
 @router.post("/ask", response_model=AskResponse)
 async def ask(req: AskRequest) -> AskResponse:
     await init_agents()
-    get_agent(req.agent)
-
     start = time.perf_counter()
 
-    fid = str(uuid.uuid4())
-    loop = asyncio.get_running_loop()
-    future: asyncio.Future = loop.create_future()
-    _response_futures[fid] = future
+    # Auto-routing
+    chosen_agent = req.agent
+    router_used = False
 
-    msg = Message(
-        sender="__api_collector__",
-        receiver=req.agent,
-        content=req.message,
-        msg_type="task",
-        id=fid,
-    )
-    await _bus.publish(msg)
+    if req.agent == "auto":
+        router_used = True
+        # Router agent'a sor
+        router_result = await _run_single_agent("router", req.message, timeout=15)
+        if isinstance(router_result, dict):
+            chosen_agent = router_result.get("agent", "researcher")
+        else:
+            chosen_agent = "researcher"
+        logger.info("api.auto_routed", chosen=chosen_agent, query=req.message[:60])
 
-    try:
-        result = await asyncio.wait_for(future, timeout=req.timeout)
-    except asyncio.TimeoutError:
-        _response_futures.pop(fid, None)
-        raise HTTPException(status_code=504, detail="Agent zaman asimina ugradi") from None
+    # Secilen agent'i kontrol et
+    get_agent(chosen_agent)
+
+    # Asil agent'i calistir
+    result = await _run_single_agent(chosen_agent, req.message, timeout=req.timeout)
 
     duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -137,7 +162,7 @@ async def ask(req: AskRequest) -> AskResponse:
             ]
             return AskResponse(
                 answer=result["research"],
-                agent=req.agent,
+                agent=chosen_agent,
                 sources=sources,
                 duration_ms=duration_ms,
                 raw={
@@ -147,15 +172,22 @@ async def ask(req: AskRequest) -> AskResponse:
                     "alerts": result.get("alerts"),
                     "code": result.get("code"),
                     "execution": result.get("execution"),
+                    "router_used": router_used,
+                    "original_request": req.agent,
                 },
             )
 
         if "answer" in result:
             return AskResponse(
                 answer=result["answer"],
-                agent=req.agent,
+                agent=chosen_agent,
                 sources=[],
                 duration_ms=duration_ms,
+                raw={
+                    "bus": _bus_type,
+                    "router_used": router_used,
+                    "original_request": req.agent,
+                },
             )
 
         if "plan" in result:
@@ -166,13 +198,14 @@ async def ask(req: AskRequest) -> AskResponse:
             )
             return AskResponse(
                 answer=f"Plan ({len(plan.get('steps', []))} adim):\n{steps_text}",
-                agent=req.agent,
+                agent=chosen_agent,
                 duration_ms=duration_ms,
-                raw={"plan": plan, "bus": _bus_type},
+                raw={"plan": plan, "bus": _bus_type, "router_used": router_used},
             )
 
     return AskResponse(
         answer=str(result),
-        agent=req.agent,
+        agent=chosen_agent,
         duration_ms=duration_ms,
+        raw={"bus": _bus_type, "router_used": router_used},
     )

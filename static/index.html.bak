@@ -73,7 +73,7 @@ header h1 { font-size: 18px; }
 <h1>Multi-Agent System</h1>
 <p>Sesli kullanim: mikrofon butonuna bas</p>
 </div>
-<button class="header-btn active" id="ttsToggle" title="Sesli okuma">ğŸ”Š</button>
+<button class="header-btn active" id="ttsToggle" title="Sesli okuma">🔊</button>
 </header>
 <div class="agents-bar" id="agentsBar"></div>
 <div class="status">
@@ -93,14 +93,14 @@ Sesli kullanim:
 </div>
 </div>
 <div class="input-area">
-<button class="mic" id="micBtn" title="Konusmak icin bas">ğŸ¤</button>
+<button class="mic" id="micBtn" title="Konusmak icin bas">🎤</button>
 <input type="text" id="messageInput" placeholder="Yazin veya mikrofonu kullanin..." autocomplete="off">
 <button class="send" id="sendBtn">Gonder</button>
 </div>
 </div>
 <script>
 const API_BASE = window.location.origin;
-let currentAgent = "auto";
+let currentAgent = "researcher";
 let isProcessing = false;
 let ttsEnabled = true;
 let recognition = null;
@@ -187,16 +187,6 @@ try {
 const res = await fetch(`${API_BASE}/api/agents`);
 const data = await res.json();
 agentsBar.innerHTML = "";
-                    const autoBtn = document.createElement("button");
-                    autoBtn.className = "agent-btn" + ("auto" === currentAgent ? " active" : "");
-                    autoBtn.textContent = "Auto";
-                    autoBtn.title = "Otomatik secim";
-                    autoBtn.onclick = () => {
-                        currentAgent = "auto";
-                        document.querySelectorAll(".agent-btn").forEach((b) => b.classList.remove("active"));
-                        autoBtn.classList.add("active");
-                    };
-                    agentsBar.appendChild(autoBtn);
 data.agents.forEach((agent) => {
 const btn = document.createElement("button");
 btn.className = "agent-btn" + (agent.name === currentAgent ? " active" : "");
