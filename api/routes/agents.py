@@ -9,7 +9,14 @@ from typing import Any
 import structlog
 from fastapi import APIRouter, HTTPException
 
-from agents.ai import CoderAgent, LLMAgent, PlannerAgent, ResearcherAgent
+from agents.ai import (
+    CoderAgent,
+    LLMAgent,
+    PlannerAgent,
+    ResearcherAgent,
+    ReviewerAgent,
+    SummarizerAgent,
+)
 from agents.devops import SystemAgent
 from api.schemas import AgentInfo, AgentsResponse, AskRequest, AskResponse, Source
 from core.base_agent import BaseAgent, Message
@@ -66,6 +73,8 @@ async def init_agents() -> None:
             "system": SystemAgent("system", _bus),
             "coder": CoderAgent("coder", _bus),
             "planner": PlannerAgent("planner", _bus),
+            "reviewer": ReviewerAgent("reviewer", _bus),
+            "summarizer": SummarizerAgent("summarizer", _bus),
         }
     )
     logger.info("api.agents_initialized", agents=list(_agents.keys()), bus=_bus_type)
