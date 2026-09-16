@@ -130,8 +130,13 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
     # ============================================================
     # GUVENLIK KATMANI 1: Rate Limiting (IP bazli)
     # ============================================================
-    client_ip = request.client.host if request.client else "unknown"
-    allowed, remaining = rate_limiter.check(client_ip)
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "unknown"
+    rate_key = f"{req.user_id or 'default'}:{client_ip}"
+    allowed, remaining = rate_limiter.check(rate_key)
     if not allowed:
         logger.warning("api.rate_limit_blocked", ip=client_ip)
         raise HTTPException(
