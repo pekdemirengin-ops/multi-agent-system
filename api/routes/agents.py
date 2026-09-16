@@ -1,4 +1,4 @@
-"""Agent endpoint'leri."""
+"""Agent endpoint'leri (hafiza destekli)."""
 from __future__ import annotations
 
 import asyncio
@@ -22,6 +22,7 @@ from agents.devops import SystemAgent
 from api.schemas import AgentInfo, AgentsResponse, AskRequest, AskResponse, Source
 from core.base_agent import BaseAgent, Message
 from core.config import get_settings
+from core.memory import get_memory
 from core.message_bus import MessageBus
 from core.redis_bus import RedisMessageBus
 
@@ -58,7 +59,7 @@ async def init_agents() -> None:
         _bus = RedisMessageBus(redis_url=settings.redis_url)
         await _bus.connect()
         _bus_type = "redis"
-        logger.info("api.bus_initialized", bus="redis", url=settings.redis_url)
+        logger.info("api.bus_initialized", bus="redis")
     else:
         _bus = MessageBus()
         _bus_type = "in-memory"
@@ -79,6 +80,10 @@ async def init_agents() -> None:
             "router": RouterAgent("router", _bus),
         }
     )
+
+    # Hafiza baslat
+    await get_memory()
+
     logger.info("api.agents_initialized", agents=list(_agents.keys()), bus=_bus_type)
 
 
@@ -91,7 +96,6 @@ def get_agent(name: str) -> BaseAgent:
 
 
 async def _run_single_agent(agent_name: str, message_text: str, timeout: int) -> dict[str, Any]:
-    """Tek bir agent'a gorev gonderir ve sonucu dondurur."""
     fid = str(uuid.uuid4())
     loop = asyncio.get_running_loop()
     future: asyncio.Future = loop.create_future()
@@ -129,28 +133,45 @@ async def ask(req: AskRequest) -> AskResponse:
     await init_agents()
     start = time.perf_counter()
 
-    # Auto-routing
+    memory = await get_memory()
+    user_id = req.user_id or "default"
+
+    # 1) Kullanici mesajini kaydet
+    await memory.save_message(user_id, "user", req.message)
+
+    # 2) Gecmisi al
+    history_text = await memory.format_for_llm(user_id, limit=10)
+
+    # 3) Auto-routing
     chosen_agent = req.agent
     router_used = False
 
     if req.agent == "auto":
         router_used = True
-        # Router agent'a sor
         router_result = await _run_single_agent("router", req.message, timeout=15)
         if isinstance(router_result, dict):
             chosen_agent = router_result.get("agent", "researcher")
         else:
             chosen_agent = "researcher"
-        logger.info("api.auto_routed", chosen=chosen_agent, query=req.message[:60])
+        logger.info("api.auto_routed", chosen=chosen_agent)
 
-    # Secilen agent'i kontrol et
     get_agent(chosen_agent)
 
-    # Asil agent'i calistir
-    result = await _run_single_agent(chosen_agent, req.message, timeout=req.timeout)
+    # 4) Mesaji gecmisle birlikte agent'a gonder
+    if history_text:
+        full_message = (
+            f"{history_text}\n\n"
+            f"---\n\n"
+            f"Kullanici simdi soruyor: {req.message}"
+        )
+    else:
+        full_message = req.message
+
+    result = await _run_single_agent(chosen_agent, full_message, timeout=req.timeout)
 
     duration_ms = int((time.perf_counter() - start) * 1000)
 
+    # 5) Cevabi kaydet
     if isinstance(result, dict):
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])
@@ -160,6 +181,13 @@ async def ask(req: AskRequest) -> AskResponse:
                 Source(title=s["title"], url=s["url"])
                 for s in result.get("sources", [])
             ]
+            await memory.save_message(
+                user_id,
+                "assistant",
+                result["research"],
+                agent=chosen_agent,
+                sources=[{"title": s.title, "url": s.url} for s in sources],
+            )
             return AskResponse(
                 answer=result["research"],
                 agent=chosen_agent,
@@ -168,44 +196,28 @@ async def ask(req: AskRequest) -> AskResponse:
                 raw={
                     "source_count": result.get("source_count", 0),
                     "bus": _bus_type,
-                    "status": result.get("status"),
-                    "alerts": result.get("alerts"),
-                    "code": result.get("code"),
-                    "execution": result.get("execution"),
                     "router_used": router_used,
-                    "original_request": req.agent,
+                    "has_history": bool(history_text),
                 },
             )
 
         if "answer" in result:
+            await memory.save_message(
+                user_id, "assistant", result["answer"], agent=chosen_agent
+            )
             return AskResponse(
                 answer=result["answer"],
                 agent=chosen_agent,
                 sources=[],
                 duration_ms=duration_ms,
-                raw={
-                    "bus": _bus_type,
-                    "router_used": router_used,
-                    "original_request": req.agent,
-                },
+                raw={"bus": _bus_type, "router_used": router_used, "has_history": bool(history_text)},
             )
 
-        if "plan" in result:
-            plan = result["plan"]
-            steps_text = "\n".join(
-                f"{i}. [{s.get('agent', '?')}] {s.get('task', '')}"
-                for i, s in enumerate(plan.get("steps", []), 1)
-            )
-            return AskResponse(
-                answer=f"Plan ({len(plan.get('steps', []))} adim):\n{steps_text}",
-                agent=chosen_agent,
-                duration_ms=duration_ms,
-                raw={"plan": plan, "bus": _bus_type, "router_used": router_used},
-            )
-
+    answer_text = str(result)
+    await memory.save_message(user_id, "assistant", answer_text, agent=chosen_agent)
     return AskResponse(
-        answer=str(result),
+        answer=answer_text,
         agent=chosen_agent,
         duration_ms=duration_ms,
-        raw={"bus": _bus_type, "router_used": router_used},
+        raw={"bus": _bus_type, "router_used": router_used, "has_history": bool(history_text)},
     )

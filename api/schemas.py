@@ -12,9 +12,10 @@ class AskRequest(BaseModel):
     message: str = Field(..., description="Sorulacak soru/gorev", min_length=1)
     agent: str = Field(
         default="researcher",
-        description="Hangi agent'a gonderilecek: researcher, llm",
+        description="Hangi agent'a gonderilecek (veya 'auto')",
     )
     timeout: int = Field(default=30, ge=1, le=120, description="Saniye cinsinden timeout")
+    user_id: str = Field(default="default", description="Kullanici ID (hafiza icin)")
 
 
 class Source(BaseModel):
@@ -33,8 +34,6 @@ class AskResponse(BaseModel):
 
 
 class AgentInfo(BaseModel):
-    """Kayitli agent bilgisi."""
-
     name: str
     status: str = "ready"
 
@@ -46,4 +45,9 @@ class AgentsResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
-    version: str = "0.1.0"
+    version: str = "0.3.0"
+
+
+class MemoryStats(BaseModel):
+    total_messages: int
+    unique_users: int

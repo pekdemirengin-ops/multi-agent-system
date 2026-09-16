@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import agents, health, team, ws
+from api.routes import agents, health, memory, team, ws
 
 logger = structlog.get_logger(__name__)
 
@@ -43,6 +43,7 @@ app.include_router(health.router)
 app.include_router(agents.router)
 app.include_router(team.router)
 app.include_router(ws.router)
+app.include_router(memory.router)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -50,7 +51,6 @@ if STATIC_DIR.exists():
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Ana sayfa - web arayuzu."""
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
@@ -60,4 +60,5 @@ async def root():
         "docs": "/docs",
         "agents_endpoint": "/api/agents",
         "team_endpoint": "/api/team",
+        "memory_endpoint": "/api/memory/stats",
     }
