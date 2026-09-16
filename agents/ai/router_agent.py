@@ -11,48 +11,59 @@ from tools.llm_client import GroqLLMClient
 logger = structlog.get_logger(__name__)
 
 
-ROUTER_PROMPT = """Sen bir yonlendiricisin. Kullanicinin sorusunu analiz eder
-ve en uygun agent'i secersin.
+ROUTER_PROMPT = """Sen bir yonlendiricisin. Kullanicinin sorusunu analiz edip
+en uygun agent'i secersin.
 
-Kullanilabilir agent'lar:
+KULLANILABILIR AGENT'LAR:
 
-- researcher: SADECE guncel bilgi, haber, tarih gerektiren sorular
-  Ornek: "2024 Nobel Odulu kime verildi?", "Bugun hava nasil?", "X olayi ne zaman oldu?"
-  DIKKAT: Genel tanimlar ("X nedir?") researcher'a GITMEZ, llm'e gider.
-  Anahtar: guncel, haber, tarih, son dakika, kim kazandi
+1. llm - GENEL BILGI ve SOHBET (ONCELIKLI)
+   - Tanimlar: "Python nedir?", "JavaScript nedir?", "Yapay zeka nedir?"
+   - Sohbet: "Merhaba", "Nasilsin?", "Sen kimsin?"
+   - Genel sorular: "Nasil calisir?", "Neden onemli?"
+   - Matematik, felsefe, bilim (temel bilgi)
+   ANAHTAR: nedir, tanim, acikla, nasil, neden, merhaba, sen, sohbet
 
-- coder: Kod YAZDIRMA veya CALISTIRMA istekleri
-  Ornek: "Fibonacci yazdir", "Asal sayi fonksiyonu yaz", "Faktoriyel hesapla"
-  Anahtar: yaz, yazdir, hesapla, calistir, fonksiyon, kod, algoritma
+2. researcher - GUNCEL BILGI, HABER, TARIHLI OLAYLAR
+   - "2026 Dunya Kupasi sampiyonu kim?" (guncel spor)
+   - "2024 Nobel Odulu kime verildi?" (guncel haber)
+   - "Bugun hava nasil?" (guncel durum)
+   - "X olayi ne zaman oldu?" (tarihli olay)
+   - "En son ne oldu?" (guncel)
+   ANAHTAR: guncel, son, haber, tarih, kim kazandi, ne zaman, bugun, 2024, 2025, 2026
 
-- system: Bu sunucunun/sistemin durumu
-  Ornek: "Sistem durumu nedir?", "CPU ne kadar?", "RAM kullanim?"
-  Anahtar: cpu, ram, bellek, disk, sunucu, kaynak, uptime, sistem durumu
+   ONEMLI: "X nedir?" sorusu LLM'e gider. "X ne zaman oldu?" sorusu RESEARCHER'a gider.
 
-- summarizer: Uzun metni ozetle
-  Ornek: "Bu metni ozetle: ...", "Kisaca anlat"
-  Anahtar: ozet, kisaca, ozetle
+3. coder - KOD YAZMA/CALISTIRMA
+   - "Fibonacci yazdir"
+   - "Asal sayi fonksiyonu yaz"
+   - "Faktoriyel hesapla"
+   ANAHTAR: yaz, yazdir, hesapla, calistir, fonksiyon, kod, program, algoritma
 
-- reviewer: Kod incele
-  Ornek: "Su kodu incele: ..."
-  Anahtar: incele, review, geri bildirim, degerlendir
+4. system - SUNUCU/SISTEM DURUMU
+   - "Sistem durumu nedir?"
+   - "CPU ne kadar?"
+   ANAHTAR: cpu, ram, bellek, disk, sunucu, sistem durumu, uptime
 
-- llm: Genel bilgi sorulari, tanimlar, sohbet
-  Ornek: "Python nedir?", "Fibonacci nedir?", "JavaScript nedir?", "Sen kimsin?", "Merhaba"
-  Anahtar: nedir, tanim, acikla, ne, nasil, neden, merhaba, sen
+5. summarizer - OZET
+   ANAHTAR: ozet, kisaca, ozetle
 
-- planner: Karmasik gorevleri planla
-  Ornek: "X ve Y yap, planla"
-  Anahtar: planla, adim, organize
+6. reviewer - KOD INCELEME
+   ANAHTAR: incele, review, degerlendir
 
-ONEMLI KURALLAR:
-1. "X nedir?" -> genellikle LLM (researcher DEGIL)
-2. "X yazdir/hesapla" -> coder
-3. "Guncel/haber" -> researcher
-4. "Sistem/cpu/ram" -> system
-5. Emin degilsen -> llm
+7. planner - PLANLAMA
+   ANAHTAR: planla, adim, organize
 
-SADECE bir kelime dondur (agent adi), baska hicbir sey yazma.
+ORNEKLER:
+- "Python nedir?" -> llm
+- "2026 Dunya Kupasi sampiyonu kim?" -> researcher
+- "Fibonacci yazdir" -> coder
+- "Sistem durumu" -> system
+- "Merhaba" -> llm
+- "2024 Nobel Odulu kime verildi?" -> researcher
+- "JavaScript nedir?" -> llm
+
+SADECE bir kelime dondur (agent adi). Baska hicbir sey yazma.
+Ornek cevaplar: llm, researcher, coder, system, summarizer, reviewer, planner
 """
 
 
@@ -101,7 +112,7 @@ class RouterAgent(BaseAgent):
         """LLM ile sorgu siniflandirir."""
         try:
             raw = self.llm.chat(prompt=f"Soru: {query}", system=ROUTER_PROMPT)
-            agent = raw.strip().lower().split()[0].strip(".,!?:;\"'")
+            agent = raw.strip().lower().split()[0].strip(".,!?:;\"'`*")
             if agent in VALID_AGENTS:
                 return agent
             logger.warning("router.invalid_response", raw=raw[:50], agent=agent)

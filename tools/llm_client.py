@@ -1,4 +1,4 @@
-"""Groq LLM istemcisi — ücretsiz tier."""
+"""Groq LLM istemcisi."""
 from __future__ import annotations
 
 import os
@@ -7,10 +7,8 @@ from typing import Any
 from dotenv import load_dotenv
 from groq import Groq
 
-# .env dosyasını yükle (bir kere çağrılır)
 load_dotenv()
 
-# ✅ Güncel model (llama-3.3-70b-versatile 16 Ağustos 2026'da kaldırıldı)
 DEFAULT_MODEL = "openai/gpt-oss-120b"
 
 AVAILABLE_MODELS = [
@@ -22,12 +20,12 @@ AVAILABLE_MODELS = [
 
 
 class GroqLLMClient:
-    """Groq API etrafında basit bir sarmalayıcı."""
+    """Groq API etrafinda basit bir sarmalayici."""
 
     def __init__(self, model: str | None = None) -> None:
         api_key = os.getenv("GROQ_API_KEY", "")
         if not api_key:
-            raise ValueError("GROQ_API_KEY ortam değişkeni ayarlanmamış (.env dosyasını kontrol et)")
+            raise ValueError("GROQ_API_KEY ortam degiskeni ayarlanmamis")
         self.client = Groq(api_key=api_key)
         self.model = model or DEFAULT_MODEL
 
@@ -41,7 +39,7 @@ class GroqLLMClient:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            temperature=0.7,
+            temperature=0.2,
             max_tokens=2048,
         )
         return response.choices[0].message.content or ""
@@ -52,13 +50,12 @@ class GroqLLMClient:
         tools: list[dict[str, Any]],
         tool_choice: str = "auto",
     ) -> Any:
-        """Araç çağrısını destekleyen sohbet."""
         return self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             tools=tools,
             tool_choice=tool_choice,
-            temperature=0.3,
+            temperature=0.2,
         )
 
     def __repr__(self) -> str:

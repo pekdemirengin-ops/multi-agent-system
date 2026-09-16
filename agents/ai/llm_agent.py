@@ -1,6 +1,7 @@
-"""Groq tabanlı LLM Agent."""
+"""Groq tabanli LLM Agent."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -11,11 +12,19 @@ from tools.llm_client import GroqLLMClient
 logger = structlog.get_logger(__name__)
 
 
-class LLMAgent(BaseAgent):
-    """Groq LLM çağrılarını yapan ajan.
+DEFAULT_SYSTEM_PROMPT = """Sen yardimci bir AI asistansin. Turkce, net ve faydali cevaplar verirsin.
 
-    Mesaj alır → LLM'e gönderir → sonucu gönderene döner.
-    """
+Kurallar:
+- Soruya dogrudan cevap ver
+- Maddeler halinde, oz ve net ol
+- Ornek ver (gerekiyorsa)
+- En fazla 5 madde kullan
+- Gereksiz uzatma
+"""
+
+
+class LLMAgent(BaseAgent):
+    """Groq LLM cagrilarini yapan ajan."""
 
     def __init__(
         self,
@@ -26,10 +35,11 @@ class LLMAgent(BaseAgent):
     ) -> None:
         super().__init__(name, bus)
         self.llm = GroqLLMClient(model=model)
-        self.system_prompt = system_prompt or "Sen yardımcı bir asistansın."
+        base_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+        today = datetime.now().strftime("%Y-%m-%d")
+        self.system_prompt = f"{base_prompt}\n\nBugunun tarihi: {today}"
 
     async def handle(self, message: Message) -> None:
-        """Mesajı LLM'e gönderir, yanıtı gönderene döner."""
         if message.msg_type != "task":
             return
 
