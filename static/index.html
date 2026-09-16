@@ -39,12 +39,12 @@ border-radius: 4px; font-family: monospace; font-size: 13px; }
 .sources { margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 12px; }
 .sources a { display: block; color: #667eea; text-decoration: none;
 margin: 3px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.input-area { display: flex; gap: 10px; padding: 16px 20px; background: white;
+.input-area { display: flex; gap: 8px; padding: 14px 16px; background: white;
 border-top: 1px solid #e5e5ea; align-items: center; }
-input[type="text"] { flex: 1; padding: 14px 18px; border: 2px solid #e5e5ea;
+input[type="text"] { flex: 1; padding: 12px 16px; border: 2px solid #e5e5ea;
 border-radius: 24px; font-size: 15px; outline: none; }
 input[type="text"]:focus { border-color: #667eea; }
-button.mic { width: 50px; height: 50px; border-radius: 50%; background: #f0f0f5;
+button.mic { width: 48px; height: 48px; border-radius: 50%; background: #f0f0f5;
 border: 2px solid #e5e5ea; cursor: pointer; font-size: 12px;
 font-weight: 700; color: #555;
 display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -53,8 +53,8 @@ color: white; animation: pulse 1s infinite; }
 @keyframes pulse {
 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
 50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); } }
-button.send { padding: 14px 24px; background: #667eea; color: white;
-border: none; border-radius: 24px; font-size: 15px; font-weight: 600;
+button.send { padding: 12px 20px; background: #667eea; color: white;
+border: none; border-radius: 24px; font-size: 14px; font-weight: 600;
 cursor: pointer; flex-shrink: 0; }
 button.send:disabled { background: #ccc; cursor: not-allowed; }
 .status { font-size: 12px; color: #888; padding: 4px 20px 0; min-height: 18px; }
@@ -64,7 +64,12 @@ background: #4ade80; margin-right: 6px; }
 .container { height: 100vh; border-radius: 0; }
 body { padding: 0; }
 header h1 { font-size: 18px; }
-.message { max-width: 90%; font-size: 14px; } }
+.message { max-width: 90%; font-size: 14px; }
+.input-area { padding: 10px 12px; gap: 6px; }
+input[type="text"] { padding: 10px 14px; font-size: 14px; }
+button.mic { width: 42px; height: 42px; font-size: 11px; }
+button.send { padding: 10px 14px; font-size: 13px; }
+}
 </style>
 </head>
 <body>
@@ -72,7 +77,7 @@ header h1 { font-size: 18px; }
 <header>
 <div>
 <h1>Multi-Agent System</h1>
-<p>Sesli kullanim: MIC butonuna bas</p>
+<p>MIC butonuna bas, konus. Yaz da kullanabilirsin.</p>
 </div>
 <button class="header-btn active" id="ttsToggle" title="Sesli okuma">SES</button>
 </header>
@@ -85,12 +90,8 @@ header h1 { font-size: 18px; }
 <div class="message assistant">
 Multi-Agent System'e hos geldiniz!
 
-Sesli kullanim:
-1. MIC butonuna bas
-2. Sorunuzu soyleyin
-3. Otomatik yaziya cevrilecek
-4. Gonder'e bas
-5. Cevabi dinleyin
+MIC butonuna bas ve konus. Sistem otomatik algilar
+(Turkce ve teknik kelimeler: Python, JavaScript, Fibonacci).
 </div>
 </div>
 <div class="input-area">
@@ -115,6 +116,58 @@ const agentsBar = document.getElementById("agentsBar");
 const statusText = document.getElementById("statusText");
 const ttsToggle = document.getElementById("ttsToggle");
 
+// ============================================================
+// SES TANIMA DUZELTME SOZLUGU
+// Turkce ses tanima, teknik kelimeleri yanlis ceviriyor.
+// Asagidaki sozluk ile otomatik duzeltiyoruz.
+// ============================================================
+const SPEECH_CORRECTIONS = [
+[/\bfayton\b/gi, "python"],
+[/\bpiton\b/gi, "python"],
+[/\bpayt[ıi]n\b/gi, "python"],
+[/\bfayt[ıi]n\b/gi, "python"],
+[/\bcava\s*skript\b/gi, "javascript"],
+[/\bjava\s*skript\b/gi, "javascript"],
+[/\bcavaskript\b/gi, "javascript"],
+[/\bjavascript\b/gi, "javascript"],
+[/\bfibonachi\b/gi, "fibonacci"],
+[/\bfibonacci\b/gi, "fibonacci"],
+[/\bcoder\b/gi, "coder"],
+[/\bkoder\b/gi, "coder"],
+[/\bara[şs]t[ıi]r\b/gi, "arastir"],
+[/\bsitem\b/gi, "system"],
+[/\bsistem\b/gi, "system"],
+[/\brezervuar\b/gi, "researcher"],
+[/\bresearcher\b/gi, "researcher"],
+[/\bsamari[sz]er\b/gi, "summarizer"],
+[/\bsummarizer\b/gi, "summarizer"],
+[/\breviewer\b/gi, "reviewer"],
+[/\bplan[ıi]r\b/gi, "planner"],
+[/\bplanner\b/gi, "planner"],
+[/\bllm\b/gi, "llm"],
+[/\bel\s*el\s*em\b/gi, "llm"],
+[/\bapi\b/gi, "api"],
+[/\bapi\s*key\b/gi, "api key"],
+[/\bne\s*dir\b/gi, "nedir"],
+[/\bna[ıi]ls[ıi]n\b/gi, "nasilsin"],
+[/\bmeraba\b/gi, "merhaba"],
+[/\bmeraba\s*lar\b/gi, "merhabalar"],
+];
+
+function correctSpeech(text) {
+let corrected = text;
+for (const [pattern, replacement] of SPEECH_CORRECTIONS) {
+corrected = corrected.replace(pattern, replacement);
+}
+if (corrected !== text) {
+console.log("[Speech correction]", text, "->", corrected);
+}
+return corrected;
+}
+
+// ============================================================
+// TTS (Sesli okuma)
+// ============================================================
 function speak(text) {
 if (!ttsEnabled || !("speechSynthesis" in window)) return;
 window.speechSynthesis.cancel();
@@ -135,18 +188,23 @@ ttsToggle.classList.toggle("active", ttsEnabled);
 if (!ttsEnabled) stopSpeaking();
 };
 
+// ============================================================
+// STT (Ses tanima) - Turkce ana dil
+// ============================================================
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
 recognition = new SpeechRecognition();
 recognition.lang = "tr-TR";
 recognition.continuous = false;
 recognition.interimResults = true;
+
 recognition.onstart = () => {
 isListening = true;
 micBtn.classList.add("listening");
 statusText.textContent = "Dinliyorum...";
 stopSpeaking();
 };
+
 recognition.onresult = (event) => {
 let finalText = "";
 let interimText = "";
@@ -155,12 +213,16 @@ const transcript = event.results[i][0].transcript;
 if (event.results[i].isFinal) finalText += transcript;
 else interimText += transcript;
 }
-messageInput.value = finalText || interimText;
 if (finalText) {
+const corrected = correctSpeech(finalText);
+messageInput.value = corrected;
 statusText.textContent = "Algilandi, gonderiliyor...";
-setTimeout(() => { if (messageInput.value.trim()) sendMessage(); }, 400);
+setTimeout(() => { if (messageInput.value.trim()) sendMessage(); }, 600);
+} else {
+messageInput.value = interimText;
 }
 };
+
 recognition.onerror = (event) => {
 isListening = false;
 micBtn.classList.remove("listening");
@@ -169,11 +231,13 @@ else if (event.error === "no-speech") statusText.textContent = "Ses algilanamadi
 else statusText.textContent = "Hata: " + event.error;
 setTimeout(() => { statusText.textContent = "Hazir"; }, 2000);
 };
+
 recognition.onend = () => {
 isListening = false;
 micBtn.classList.remove("listening");
 if (statusText.textContent === "Dinliyorum...") statusText.textContent = "Hazir";
 };
+
 micBtn.onclick = () => {
 if (isListening) recognition.stop();
 else { stopSpeaking(); try { recognition.start(); } catch (e) { console.error(e); } }
@@ -183,15 +247,17 @@ micBtn.style.display = "none";
 statusText.textContent = "Tarayici konusma tanimayi desteklemiyor";
 }
 
+// ============================================================
+// Agent listesi
+// ============================================================
 async function loadAgents() {
 try {
 const res = await fetch(`${API_BASE}/api/agents`);
 const data = await res.json();
 agentsBar.innerHTML = "";
 const autoBtn = document.createElement("button");
-autoBtn.className = "agent-btn" + (currentAgent === "auto" ? " active" : "");
+autoBtn.className = "agent-btn active";
 autoBtn.textContent = "Auto";
-autoBtn.title = "Otomatik secim";
 autoBtn.onclick = () => {
 currentAgent = "auto";
 document.querySelectorAll(".agent-btn").forEach((b) => b.classList.remove("active"));
@@ -201,7 +267,7 @@ agentsBar.appendChild(autoBtn);
 data.agents.forEach((agent) => {
 if (agent.name === "router") return;
 const btn = document.createElement("button");
-btn.className = "agent-btn" + (agent.name === currentAgent ? " active" : "");
+btn.className = "agent-btn";
 btn.textContent = agent.name;
 btn.onclick = () => {
 currentAgent = agent.name;
@@ -267,7 +333,7 @@ try {
 const res = await fetch(`${API_BASE}/api/ask`, {
 method: "POST",
 headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ message, agent: currentAgent, timeout: 60 })
+body: JSON.stringify({ message, agent: currentAgent, timeout: 60, user_id: "default" })
 });
 loadingDiv.remove();
 if (!res.ok) {
