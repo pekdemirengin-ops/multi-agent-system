@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,9 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-DB_PATH = Path("data") / "memory.db"
+# DATA_DIR env'den oku, yoksa "data" kullan
+DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
+DB_PATH = DATA_DIR / "memory.db"
 
 
 class ConversationMemory:
@@ -22,7 +25,6 @@ class ConversationMemory:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
     async def init(self) -> None:
-        """Tablolari olusturur (yoksa)."""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
@@ -51,7 +53,6 @@ class ConversationMemory:
         agent: str | None = None,
         sources: list[dict[str, Any]] | None = None,
     ) -> None:
-        """Bir mesaji kaydeder."""
         sources_json = json.dumps(sources or [], ensure_ascii=False)
         created_at = datetime.now(timezone.utc).isoformat()
         async with aiosqlite.connect(self.db_path) as db:
@@ -67,7 +68,6 @@ class ConversationMemory:
     async def get_history(
         self, user_id: str, limit: int = 10
     ) -> list[dict[str, Any]]:
-        """Son N mesaji doner (en yeni en sonda)."""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
                 """
@@ -81,7 +81,6 @@ class ConversationMemory:
             ) as cursor:
                 rows = await cursor.fetchall()
 
-        # Ters cevir (en eski en basta)
         history: list[dict[str, Any]] = []
         for role, content, agent, sources_json, created_at in reversed(rows):
             history.append(
@@ -96,21 +95,17 @@ class ConversationMemory:
         return history
 
     async def format_for_llm(self, user_id: str, limit: int = 10) -> str:
-        """Gecmisi LLM'e verilecek metne cevirir."""
         history = await self.get_history(user_id, limit=limit)
         if not history:
             return ""
-
         lines = ["Onceki konusmalar:"]
         for msg in history:
             role_label = "Kullanici" if msg["role"] == "user" else "Asistan"
             content = msg["content"][:200]
             lines.append(f"{role_label}: {content}")
-
         return "\n".join(lines)
 
     async def clear_user(self, user_id: str) -> int:
-        """Bir kullanicinin tum gecmisini siler. Silinen satir sayisini doner."""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 "DELETE FROM messages WHERE user_id = ?", (user_id,)
@@ -121,7 +116,6 @@ class ConversationMemory:
         return count
 
     async def stats(self) -> dict[str, Any]:
-        """Genel istatistikler."""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
                 "SELECT COUNT(*), COUNT(DISTINCT user_id) FROM messages"
@@ -130,12 +124,10 @@ class ConversationMemory:
         return {"total_messages": total, "unique_users": users}
 
 
-# Global instance
 _memory: ConversationMemory | None = None
 
 
 async def get_memory() -> ConversationMemory:
-    """Global memory instance'i doner (init edilmisse)."""
     global _memory
     if _memory is None:
         _memory = ConversationMemory()
