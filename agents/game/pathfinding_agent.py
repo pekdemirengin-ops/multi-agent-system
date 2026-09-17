@@ -32,6 +32,15 @@ class PathfindingAgent(BaseAgent):
                 # Metinden parse etmeye calis
                 params = self._parse_text(str(content))
 
+            # Eger params bos ise, content icinde JSON olabilir (cift string)
+            if not params and isinstance(content, str):
+                # Escape'li JSON'u temizle
+                cleaned = content.strip()
+                if cleaned.startswith("'") and cleaned.endswith("'"):
+                    cleaned = cleaned[1:-1]
+                cleaned = cleaned.replace('\\"', '"').replace("\\n", "\n")
+                params = self._parse_text(cleaned)
+
             if not params:
                 await self.send(
                     message.sender,
