@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     use_redis_bus: bool = False
 
+    # PostgreSQL (opsiyonel)
+    database_url: str = ""
+    use_postgres: bool = False
+
+    # SQLite fallback
+    data_dir: str = "data"
+
     # LLM
     openai_api_key: str = ""
     anthropic_api_key: str = ""
