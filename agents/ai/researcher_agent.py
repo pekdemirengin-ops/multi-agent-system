@@ -74,29 +74,37 @@ class ResearcherAgent(BaseAgent):
         self.llm = GroqLLMClient(model="llama-3.1-8b-instant") if use_llm_summary else None
 
     def _split_query(self, query: str) -> list[str]:
-        """Soruyu alt sorulara boler. 've' ile ayrilanlari ayirir."""
-        lower = query.lower()
+        """Soruyu alt sorulara boler VE her parcaya baglam ekler."""
+        # Once virgul veya "ve" ile bol
         parts = []
-        # " ve " ile bol
-        if " ve " in lower:
-            raw_parts = re.split(r"\s+ve\s+", query, flags=re.IGNORECASE)
-            parts = [p.strip() for p in raw_parts if p.strip()]
-        # " , " ile bol (virgul + ve olmadan)
-        elif query.count(",") >= 1:
-            raw_parts = [p.strip() for p in query.split(",") if p.strip()]
-            if len(raw_parts) >= 2:
-                parts = raw_parts
+        if "," in query:
+            parts = [p.strip() for p in query.split(",") if p.strip()]
+        elif " ve " in query.lower():
+            parts = [p.strip() for p in re.split(r"\s+ve\s+", query, flags=re.IGNORECASE) if p.strip()]
         else:
-            parts = [query]
+            return [query]
 
-        # 1'den azsa, ana sorgu
         if len(parts) < 2:
             return [query]
 
-        # Son parcaya baglam ekle (ilk parcanin konusu)
-        # Ornek: "Ronaldo kim, hangi takimda, hoca kim" -> 3 parca
-        # Ilk parcayi referans olarak kullan
-        return parts
+        # Ana konuyu cikar: ilk parca genelde "X kimdir" -> "X"
+        first = parts[0]
+        # "kimdir", "nedir", "nerede" gibi kelimeleri cikar
+        subject = first
+        for kw in ["kimdir", "kim", "nedir", "ne demek", "nerede", "ne zaman"]:
+            subject = re.sub(rf"\b{kw}\b", "", subject, flags=re.IGNORECASE)
+        subject = subject.strip(" ?.,!")
+
+        # Baglam ekle: ilk parca subject + sonraki parcalar
+        enriched_parts = [first]
+        for part in parts[1:]:
+            # Eger parca cok kisa veya baglamsiz ise subject ekle
+            if len(part.split()) < 4 and subject:
+                enriched_parts.append(f"{subject} {part}")
+            else:
+                enriched_parts.append(part)
+
+        return enriched_parts
 
     def _enrich_query(self, query: str) -> str:
         """Yil ekler (guncel bilgi icin)."""
