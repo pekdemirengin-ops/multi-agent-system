@@ -13,45 +13,115 @@ from tools.llm_client import GroqLLMClient
 logger = structlog.get_logger(__name__)
 
 
-REGEX_RULES: list[tuple[str, str]] = [
-    (r"\b(cpu|ram|bellek|disk|sunucu|sistem\s*durum|uptime|kaynak\s*kullan)", "system"),
-    (r"\b(yazd[ıi]r|hesapla|calist[ıi]r|kod\s*yaz|fonksiyon\s*yaz|program\s*yaz|algoritma\s*yaz|python\s*kod|faktoriyel|fibonacci)", "coder"),
-    (r"\b(ozetle|ozet\s*c[ıi]kar|k[ıi]saca\s*anlat|k[ıi]sa\s*ozet)", "summarizer"),
-    (r"\b(incele|review|degerlendir|geri\s*bildirim)", "reviewer"),
-    (r"\b(planla|ad[ıi]mlara\s*bol|organize\s*et)", "planner"),
-    (r"\b(guncel|son\s*dakika|haber|ne\s*zaman|kim\s*kazand[ıi]|202[4-9]|2030)", "researcher"),
-    (r"\b(nedir|ne\s*demek|tan[ıi]m|a[çc][ıi]kla|merhaba|selam|nas[ıi]ls[ıi]n|sen\s*kimsin)", "llm"),
+# ============================================================
+# GUNCEL BILGI KURALLARI (researcher'a gider)
+# ============================================================
+FRESH_INFO_PATTERNS = [
+    # Soru kelimeleri
+    r"\bkim\b", r"\bkimdir\b", r"\bkimler\b",
+    r"\bnerede\b", r"\bnerede\b", r"\bnerede\b",
+    r"\bne\s*zaman\b", r"\bhangi\b", r"\bka[çc]\b",
+    # Yerel yonetim
+    r"\bbelediye\s*ba[şs]kan", r"\bvali\b", r"\bmilletvekili\b",
+    r"\bbakan\b", r"\bcumhurba[şs]kan", r"\bba[şs]bakan\b",
+    # Spor
+    r"\bteknik\s*direkt[oö]r", r"\btransfer\b", r"\b[şs]ampiyon\b",
+    # Guncel olaylar
+    r"\bse[çc]im\b", r"\bse[çc]im\s*sonu[çc]", r"\bson\s*dakika\b",
+    r"\bhaber\b", r"\bguncel\b", r"\bson\b", r"\byeni\b",
+    r"\b[şs]u\s*an\b", r"\b[şs]imdi\b",
+    # Yillar (2024+)
+    r"\b202[4-9]\b", r"\b20[3-9]\d\b",
+    # Belirli sorular
+    r"\bka[çc]\s*ya[şs]", r"\bnereli\b", r"\bka[çc]\s*y[ıi]l",
 ]
+
+# Bu pattern'ler "auto"da llm'e gitsin (genel bilgi)
+GENERAL_INFO_PATTERNS = [
+    r"\bnedir\b", r"\bne\s*demek\b", r"\btan[ıi]m\b",
+    r"\bmerhaba\b", r"\bselam\b", r"\bnas[ıi]ls[ıi]n\b",
+    r"\bsen\s*kimsin\b", r"\bte[şs]ekk[uü]r\b",
+]
+
+# Kod/hesaplama
+CODER_PATTERNS = [
+    r"\byazd[ıi]r\b", r"\bhesapla\b", r"\bcal[ıi][şs]t[ıi]r\b",
+    r"\bkod\s*yaz\b", r"\bfonksiyon\s*yaz\b", r"\bprogram\s*yaz\b",
+    r"\balgoritma\s*yaz\b", r"\bpython\s*kod\b",
+    r"\bfaktoriyel\b", r"\bfibonacci\b",
+]
+
+# Sistem
+SYSTEM_PATTERNS = [
+    r"\bcpu\b", r"\bram\b", r"\bbellek\b", r"\bdisk\b",
+    r"\bsunucu\b", r"\bsistem\s*durum\b", r"\buptime\b",
+    r"\bkaynak\s*kullan",
+]
+
+# Ozet/review/plan
+OTHER_PATTERNS = {
+    "summarizer": [r"\bozetle\b", r"\bozet\s*[çc][ıi]kar\b", r"\bk[ıi]saca\s*anlat\b"],
+    "reviewer": [r"\bincele\b", r"\breview\b", r"\bde[ğg]erlendir\b"],
+    "planner": [r"\bplanla\b", r"\bad[ıi]mlara\s*b[oö]l\b", r"\borganize\s*et\b"],
+}
 
 
 def classify_by_regex(query: str) -> str | None:
-    """Regex ile hizli siniflandirma."""
+    """Regex ile hizli siniflandirma. Sira onemli!"""
     lower = query.lower()
-    for pattern, agent in REGEX_RULES:
+
+    # 1) Kod/hesaplama
+    for pattern in CODER_PATTERNS:
         if re.search(pattern, lower):
-            return agent
+            return "coder"
+
+    # 2) Sistem
+    for pattern in SYSTEM_PATTERNS:
+        if re.search(pattern, lower):
+            return "system"
+
+    # 3) Ozet/review/plan
+    for agent, patterns in OTHER_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, lower):
+                return agent
+
+    # 4) GUNCEL BILGI (researcher) - genel bilgiden ONCE
+    for pattern in FRESH_INFO_PATTERNS:
+        if re.search(pattern, lower):
+            return "researcher"
+
+    # 5) Genel bilgi (llm)
+    for pattern in GENERAL_INFO_PATTERNS:
+        if re.search(pattern, lower):
+            return "llm"
+
     return None
 
 
 ROUTER_PROMPT = """Sen bir yonlendiricisin. Soruyu analiz edip en uygun agent'i sec.
 
 AGENT'LAR:
-- llm: Genel bilgi, tanim, sohbet
-- researcher: Guncel bilgi, haber, tarihli olay
-- coder: Kod yazma, hesaplama
-- system: Sistem durumu
+- researcher: Guncel bilgi, haber, kisi/yer isimleri, tarihli olaylar, kim/ne zaman/nerede sorulari
+- coder: Kod yazma, hesaplama, matematik
+- system: Sistem durumu (CPU, RAM, disk)
 - summarizer: Ozet
 - reviewer: Kod inceleme
 - planner: Planlama
+- llm: SADECE genel tanim (nedir, ne demek), selamlama
+
+ONEMLI: Kisi ismi, yer ismi, tarih, guncel olay iceren sorular HER ZAMAN researcher'a gider.
 
 SADECE bir kelime dondur.
 
 Ornek:
 Soru: Python nedir? -> llm
+Soru: Kozan belediye baskani kim? -> researcher
+Soru: Istanbul valisi kim? -> researcher
 Soru: 2026 Dunya Kupasi sampiyonu kim? -> researcher
 Soru: Fibonacci yazdir -> coder
-
-Cevap:"""
+Soru: Merhaba -> llm
+"""
 
 
 VALID_AGENTS = {"researcher", "coder", "system", "summarizer", "reviewer", "llm", "planner"}
@@ -65,7 +135,7 @@ class RouterAgent(BaseAgent):
         name: str,
         bus: Any,
         model: str | None = None,
-        default_agent: str = "llm",
+        default_agent: str = "researcher",
         use_fast_model: bool = True,
     ) -> None:
         super().__init__(name, bus)
@@ -118,6 +188,3 @@ class RouterAgent(BaseAgent):
         except Exception as e:
             logger.exception("router.llm_error", error=str(e))
         return self.default_agent
-
-    def __repr__(self) -> str:
-        return f"<RouterAgent name={self.name!r} model={self.model}>"
