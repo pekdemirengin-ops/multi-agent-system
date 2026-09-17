@@ -1,4 +1,4 @@
-"""DuckDuckGo tabanli web arama araci (ddgs paketi)."""
+"""DuckDuckGo tabanli web arama araci (akilli puanlama)."""
 from __future__ import annotations
 
 import re
@@ -11,15 +11,31 @@ from ddgs import DDGS
 logger = structlog.get_logger(__name__)
 
 
-def search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
-    """DuckDuckGo'da arama yapar. Sonuclari onem sirasina gore dondurur."""
-    results = _do_search(query, max_results)
+# Guncel yil
+CURRENT_YEAR = datetime.now().year
 
-    # Sonuclari puanla (tarih + anahtar kelime)
-    scored = [(r, _score_result(r, query)) for r in results]
+
+def search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
+    """DuckDuckGo'da arama yapar. Sonuclari puanlayip siralar."""
+    results = _do_search(query, max_results * 2)  # 2x al, sonra filtrele
+
+    # Puanla
+    scored = []
+    for r in results:
+        score = _score_result(r, query)
+        scored.append((r, score))
+
+    # Puana gore sirala (yuksek once)
     scored.sort(key=lambda x: x[1], reverse=True)
 
-    return [r for r, _ in scored]
+    # Negatif puanlilari at
+    filtered = [r for r, s in scored if s > 0]
+
+    # Yeterli sonuc yoksa hepsini don
+    if len(filtered) < max_results:
+        filtered = [r for r, _ in scored]
+
+    return filtered[:max_results]
 
 
 def _do_search(query: str, max_results: int) -> list[dict[str, Any]]:
@@ -42,9 +58,9 @@ def _do_search(query: str, max_results: int) -> list[dict[str, Any]]:
 
 
 def _score_result(result: dict[str, Any], query: str) -> float:
-    """Sonucu puanlar (yuksek = daha alakali/guncel)."""
+    """Sonucu puanlar (yuksek = daha guncel/alakali)."""
     score = 0.0
-    text = (result.get("title", "") + " " + result.get("snippet", "")).lower()
+    text = (result.get("title", "") + " " + result.get("snippet", "") + " " + result.get("url", "")).lower()
     query_lower = query.lower()
 
     # 1) Sorgu kelimeleri eslesmesi
@@ -53,24 +69,44 @@ def _score_result(result: dict[str, Any], query: str) -> float:
         if w in text:
             score += 1.0
 
-    # 2) Guncel yil eslesmesi (2026 > 2025 > 2024)
-    current_year = datetime.now().year
-    for year_offset in range(0, 4):
-        year = current_year - year_offset
-        if str(year) in text:
-            score += (4 - year_offset) * 2.0
-            break
+    # 2) GUNCEL YIL (cok guclu)
+    if str(CURRENT_YEAR) in text:  # 2026
+        score += 10.0
+    elif str(CURRENT_YEAR - 1) in text:  # 2025
+        score -= 5.0
+    elif str(CURRENT_YEAR - 2) in text:  # 2024
+        score -= 8.0
 
-    # 3) "Yeni", "son", "seçildi" gibi guncel kelimeler
-    fresh_keywords = ["yeni", "son", "seçildi", "seçim", "2026", "guncel", "şu an"]
-    for kw in fresh_keywords:
+    # 3) Guncel kelimeler
+    fresh_kw = ["görevdeki", "mevcut başkan", "şu anki", "yeni başkan", "seçildi", "yeniden başkan"]
+    for kw in fresh_kw:
         if kw in text:
-            score += 1.5
+            score += 5.0
 
-    # 4) Eski yillar (2024 ve oncesi) -> puan dusur
-    for old_year in ["2023", "2022", "2021", "2020"]:
-        if old_year in text:
-            score -= 2.0
+    # 4) Eski bilgiler (negatif)
+    old_kw = ["2025 seçim", "sadettin saran", "ali koç dönemi", "eski başkan"]
+    for kw in old_kw:
+        if kw in text:
+            score -= 8.0
+
+    # 5) Vikipedi "görevdeki" ifadesi
+    if "görevdeki" in text:
+        score += 5.0
+
+    # 6) Haber siteleri vs blog
+    trusted_domains = ["wikipedia.org", "sabah.com.tr", "ntv.com.tr", "aa.com.tr", "cnnturk.com"]
+    for d in trusted_domains:
+        if d in result.get("url", ""):
+            score += 2.0
+
+    # 7) Tarih bilgisi (snippet basinda "Jun 8, 2026" gibi)
+    date_match = re.search(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2},?\s+(\d{4})", text, re.IGNORECASE)
+    if date_match:
+        year = int(date_match.group(2))
+        if year == CURRENT_YEAR:
+            score += 8.0
+        elif year == CURRENT_YEAR - 1:
+            score -= 3.0
 
     return score
 
@@ -98,4 +134,3 @@ if __name__ == "__main__":
         res = search(test_query, max_results=3)
         for r in res:
             print(f"  - {r['title']}")
-            print(f"    {r['snippet'][:100]}")
