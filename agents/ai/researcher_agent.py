@@ -71,7 +71,7 @@ class ResearcherAgent(BaseAgent):
         super().__init__(name, bus)
         self.max_search_results = max_search_results
         self.use_llm_summary = use_llm_summary
-        self.llm = GroqLLMClient(model="llama-3.1-8b-instant") if use_llm_summary else None
+        self.llm = GroqLLMClient(model="openai/gpt-oss-120b") if use_llm_summary else None
 
     def _split_query(self, query: str) -> list[str]:
         """Soruyu alt sorulara boler VE her parcaya baglam ekler."""
