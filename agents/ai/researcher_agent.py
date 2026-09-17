@@ -27,33 +27,43 @@ ADIM 1: Soruyu parcala
 - Her bilgi icin ayri dusun
 
 ADIM 2: Her parca icin kaynaga bak
-- Kaynaklari TEK TEK oku
-- Her parca icin EN ACIK kaynagi bul
-- Ornek: "Al-Nassr teknik direktoru" -> Transfermarkt'ta "Ange Postecoglou" yaziyor
+- Kaynaklari TEK TEK oku. Hicbirini ATLAMA.
+- Kaynak basligi ilgili gorunuyorsa, icerigini OKU.
+- Ornek: "Ronaldo yeni teknik direktoru" basligi -> ICERIKTE isim vardir.
 
 ADIM 3: Cevabi yaz
-- Her parca icin ayri cumle
+- Her parca icin AYRI cumle
 - MAKSIMUM 4 cumle
 - SADECE kaynaktaki bilgi
 - UYDURMA YOK
 
 MUTLAK KURALLAR:
-- Sorudaki HER parca icin cevap ver
-- Kaynaklarda olan bilgiyi ATLAMA (ornek: Al-Nassr, Postecoglou)
-- Kaynaklarda OLMAYAN bilgiyi YAZMA (ornek: forma numarasi)
+- Sorudaki HER parca icin cevap ver. Hicbirini atlama.
+- Kaynagi ATLAMA. Her kaynak onemli olabilir.
+- "Kaynakta yok" DEMEDEN ONCE tum kaynaklari kontrol et.
+- Kaynaklarda OLMAYAN bilgiyi YAZMA. Uydurma YAPMA.
 - Baglam: "Ronaldo'nun kulubu" -> Al-Nassr. "Portekiz milli takimi" -> ayri.
-- Bilgi yoksa: "X bilgisi kaynaklarda yer almamaktadir"
+- Bilgi GERCEKTEN yoksa: "X bilgisi kaynaklarda yer almamaktadir"
 
-ORNEK (dogru):
+ORNEK 1 (dogru cevap):
 Soru: Cristiano Ronaldo kim, hangi takimda, hoca kim?
 Kaynaklar:
   1. "Ronaldo 1985 Portekiz, Al-Nassr forvet"
   2. "Al-Nassr hocasi Ange Postecoglou, 3 Temmuz 2026"
+  3. "Ronaldo nun yeni teknik direktoru belli oldu - beIN Sports"
 Cevap: Cristiano Ronaldo, 1985 dogumlu Portekizli forvet oyuncusudur. Al-Nassr kulubunde oynamaktadir. Al-Nassr'in teknik direktoru Ange Postecoglou'dur.
 
-ORNEK (yanlis - yapma):
-Cevap: Ronaldo Portekiz milli takiminda 0 numarali formayi giyiyor. 
-   ^^^ YANLIS: milli takim degil, kulup soruluyor. 0 numara UYDURMA.
+ORNEK 2 (kaynakta bilgi varsa ATLAMA):
+Soru: Ronaldo teknik direktoru kim?
+Kaynaklar:
+  1. "Ronaldo haberleri"
+  2. "Ronaldo nun yeni teknik direktoru belli oldu - Postecoglou Al-Nassr"
+Cevap: Cristiano Ronaldo'nun kulubu Al-Nassr'in teknik direktoru Ange Postecoglou'dur.
+
+ORNEK 3 (gercekten yoksa):
+Soru: X kisisi nerede yasiyor?
+Kaynaklar: [X hakkinda bilgi var, yasadigi yer yok]
+Cevap: X kisisi hakkinda bilgi bulundu ancak yasadigi yer kaynaklarda yer almamaktadir.
 
 Simdi sen cevapla:"""
 
@@ -123,7 +133,7 @@ class ResearcherAgent(BaseAgent):
         context_lines = []
         for i, s in enumerate(sources, 1):
             context_lines.append(f"Kaynak {i}: {s['title']}")
-            context_lines.append(f"Icerik: {s['snippet']}")
+            context_lines.append(f"Icerik: {s['snippet'][:2000]}")
             context_lines.append("")
         context = "\n".join(context_lines)
         prompt = f"Soru: {query}\n\nKaynaklar:\n{context}\n\nCevap:"
