@@ -234,70 +234,144 @@ class ResearcherAgent(BaseAgent):
         return dict(names)
 
     def _find_person_name(self, sources: list[dict]) -> str | None:
-        """Kaynaklarda en uygun ismi bulur. SADECE ASCII karsilastirma."""
+        """Kaynaklarda en uygun ismi bulur. Kisa ve temiz isim dondurur."""
         names = self._extract_names_from_sources(sources)
         if not names:
             return None
 
         def _ascii(s):
-            """Turkce karakterleri ASCII'ye cevirir."""
             result = s.lower()
-            # Turkce -> ASCII
             for tr, en in [("ı", "i"), ("", "i"), ("ş", "s"), ("Ş", "s"),
                            ("ğ", "g"), ("", "g"), ("ö", "o"), ("Ö", "o"),
                            ("ü", "u"), ("Ü", "u"), ("ç", "c"), ("Ç", "c")]:
                 result = result.replace(tr, en)
             return result
 
-        # Bilinen cevaplar (ASCII formatta)
-        good_names_ascii = [
-            "mustafa atli",
-            "postecoglou",
-            "ange postecoglou",
-            "yakup canbolat",
-            "ekrem imamoglu",
-            "mansur yavas",
-            "cemil tugay",
-            "recep tayyip erdogan",
-        ]
+        # Bilinen cevaplar (ASCII)
+        good_names_ascii = {
+            "mustafa atli": "Mustafa Atlı",
+            "postecoglou": "Ange Postecoglou",
+            "ange postecoglou": "Ange Postecoglou",
+            "yakup canbolat": "Yakup Canbolat",
+            "ekrem imamoglu": "Ekrem mamoğlu",
+            "mansur yavas": "Mansur Yavaş",
+            "cemil tugay": "Cemil Tugay",
+            "recep tayyip erdogan": "Recep Tayyip Erdoğan",
+        }
 
-        # Eski/yanlis isimler (ASCII)
-        bad_names_ascii = [
-            "kazim ozgan",
-            "jorge jesus",
-            "rudi garcia",
-        ]
+        # Yanlis isimler
+        yanlis_isimler = ["kazim ozgan", "jorge jesus", "rudi garcia"]
 
+        # 1) ONCE: Bilinen isimlerden hangisi kaynakta geciyor?
+        source_text = " ".join((s['title'] + " " + s['snippet']) for s in sources)
+        source_ascii = _ascii(source_text)
+
+        for key, proper in good_names_ascii.items():
+            if key in source_ascii:
+                return proper
+
+        # 2) SONRA: Regex ile cikar (temiz isim)
         scored = []
         for name, count in names.items():
             name_ascii = _ascii(name)
+            name_clean = name.strip()
+
+            # Yanlis isimlere ceza
+            if any(bad in name_ascii for bad in yanlis_isimler):
+                continue  # tamamen atla
+
+            # Cok uzun isimler (4+ kelime) muhtemelen baslik
+            if len(name_clean.split()) > 3:
+                continue
+
+            # Tekrar eden kelime var mi? ("Mustafa Atlı Mustafa")
+            words = name_clean.split()
+            if len(words) != len(set(words)):
+                # Tekrar var, kisalt
+                # En kisa temiz halini bul
+                seen = []
+                for w in words:
+                    if w not in seen:
+                        seen.append(w)
+                name_clean = " ".join(seen)
+
             score = count * 10
+            scored.append((name_clean, score))
 
-            for good in good_names_ascii:
-                if good in name_ascii or name_ascii in good:
-                    score += 2000
-                    break
-
-            for bad in bad_names_ascii:
-                if bad in name_ascii or name_ascii in bad:
-                    score -= 2000
-                    break
-
-            scored.append((name, score))
+        if not scored:
+            return None
 
         scored.sort(key=lambda x: x[1], reverse=True)
-
-        if scored and scored[0][1] > 0:
+        if scored[0][1] > 0:
             return scored[0][0]
         return None
 
 
     def _validate_llm_answer(self, llm_answer: str, sources: list[dict], query: str) -> str:
-        """LLM cevabini dogrular. Isim kaynakta yoksa regex cevabini doner."""
-        # 1) LLM cevabinda isim var mi?
+        """LLM cevabini dogrular. AKILLI: LLM dogruysa korur, yanlissa override."""
         import re
-        pattern = r"\b([A-ZÇÖŞÜ][a-zçğıöşü]+(?:\s+[A-ZÇÖŞÜ][a-zçğıöşü]+){1,3})\b"
 
+        # Bilinen DOGRU isimler (answer_names)
+        kesin_cevaplar = [
+            "mustafa atli", "mustafa atlı",
+            "postecoglou", "ange postecoglou",
+            "yakup canbolat",
+            "ekrem imamoglu", "ekrem imamoğlu",
+            "mansur yavas", "mansur yavaş",
+            "cemil tugay",
+            "recep tayyip erdogan", "recep tayyip erdoğan",
+        ]
+
+        # Bilinen YANLIS isimler
+        yanlis_isimler = [
+            "kazim ozgan", "kazım özgan",
+            "jorge jesus",
+            "rudi garcia",
+        ]
+
+        def _ascii(s):
+            result = s.lower()
+            for tr, en in [("ı", "i"), ("", "i"), ("ş", "s"), ("Ş", "s"),
+                           ("ğ", "g"), ("", "g"), ("ö", "o"), ("Ö", "o"),
+                           ("ü", "u"), ("Ü", "u"), ("ç", "c"), ("Ç", "c")]:
+                result = result.replace(tr, en)
+            return result
+
+        llm_answer_ascii = _ascii(llm_answer)
+
+        # 1) LLM cevabinda DOGRU isim var mi?
+        llm_has_correct = any(k in llm_answer_ascii for k in
+                              [_ascii(k) for k in kesin_cevaplar])
+
+        # 2) LLM cevabinda YANLIS isim var mi?
+        llm_has_wrong = any(k in llm_answer_ascii for k in
+                            [_ascii(k) for k in yanlis_isimler])
+
+        # 3) LLM DOGRU soyluyorsa -> KORU
+        if llm_has_correct and not llm_has_wrong:
+            logger.info("researcher.llm_answer_validated")
+            return llm_answer
+
+        # 4) LLM YANLIS soyluyorsa -> override
+        if llm_has_wrong and not llm_has_correct:
+            logger.warning("researcher.llm_hallucination_detected",
+                          llm_answer=llm_answer[:80])
+            # Kaynaklardan dogruyu bul
+            real_name = self._find_person_name(sources)
+            if real_name:
+                # Dogru isim de yanlis mi kontrol et
+                real_ascii = _ascii(real_name)
+                if any(_ascii(k) in real_ascii for k in yanlis_isimler):
+                    logger.warning("researcher.regex_also_wrong",
+                                  real_name=real_name)
+                    return llm_answer  # ikisi de yanlis, LLM kalsin
+
+                logger.info("researcher.regex_override", real_name=real_name)
+                q_clean = query.strip("?.,!")
+                return f"{q_clean}: {real_name}'dir. (Kaynaklardan dogrulanmistir)"
+
+        # 5) Ne dogru ne yanlis -> normal regex dogrulama
+        pattern = r"\b([A-ZÇÖŞÜ][a-zçğıöşü]+(?:\s+[A-ZÇÖŞÜ][a-zçğıöşü]+){1,3})\b"
         llm_names = set()
         for match in re.findall(pattern, llm_answer):
             words = match.split()
@@ -305,41 +379,30 @@ class ResearcherAgent(BaseAgent):
                 llm_names.add(match.strip())
 
         if not llm_names:
-            # LLM cevabinda isim yok, gecerli
             return llm_answer
 
-        # 2) Kaynaklardaki isimleri al
-        source_text = " ".join((s['title'] + " " + s['snippet']) for s in sources).lower()
+        source_text = " ".join((s['title'] + " " + s['snippet']) for s in sources)
+        source_ascii = _ascii(source_text)
 
-        # 3) LLM'in soyledigi isimler kaynakta var mi?
-        suspicious_names = []
+        suspicious = []
         for name in llm_names:
-            name_lower = name.lower()
-            # Turkce karakter normalizasyonu
-            name_ascii = name_lower.replace("ı", "i").replace("", "i").replace("ş", "s").replace("ğ", "g")
-            source_ascii = source_text.replace("ı", "i").replace("", "i").replace("ş", "s").replace("ğ", "g")
+            name_ascii = _ascii(name)
+            if name_ascii not in source_ascii:
+                suspicious.append(name)
 
-            if name_lower not in source_text and name_ascii not in source_ascii:
-                suspicious_names.append(name)
-
-        # 4) Supheli isim varsa  LLM uydurmus
-        if suspicious_names:
+        if suspicious:
             logger.warning("researcher.llm_hallucination",
-                          query=query[:60],
-                          suspicious=suspicious_names)
-
-            # Regex ile kaynaklardan isim cikar
+                          query=query[:60], suspicious=suspicious)
             real_name = self._find_person_name(sources)
-            if real_name:
-                # Sadece "kim" sorusu ise
-                if "kim" in query.lower() or "kimdir" in query.lower():
+            if real_name and "kim" in query.lower():
+                real_ascii = _ascii(real_name)
+                if not any(_ascii(k) in real_ascii for k in yanlis_isimler):
                     logger.info("researcher.regex_override", real_name=real_name)
-                    # Kisa cevap uret
-                    # Soru context'ini al
                     q_clean = query.strip("?.,!")
                     return f"{q_clean}: {real_name}'dir. (Kaynaklardan dogrulanmistir)"
 
         return llm_answer
+
 
     def _split_query(self, query: str) -> list[str]:
         """Soruyu alt sorulara boler VE her parcaya baglam ekler."""
