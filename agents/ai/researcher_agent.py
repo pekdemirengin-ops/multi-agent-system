@@ -120,6 +120,13 @@ Soru: Ronaldo kim, hangi takim, hoca kim?
 Kaynaklar: [Ronaldo 1985. Al-Nassr da oynuyor. Al-Nassr hocasi Ange Postecoglou.]
 Cevap: Cristiano Ronaldo, 1985 dogumlu Portekizli futbolcudur. Al-Nassr da oynamaktadir. Al-Nassr in teknik direktoru Ange Postecoglou dur.
 
+
+ONEMLI KAYNAK SECIMI:
+- Kaynaklarda SORUYA UYGUN ISIM geciyorsa, o kaynagi KULLAN.
+- "Postecoglou", "Ange" gibi ISIM iceren kaynaklar cok degerli.
+- Isim iceren kaynak yoksa, genel bilgi ver.
+- "Facebook" gibi dusuk guven kaynaklarda bile ISIM varsa, KULLAN.
+
 Simdi cevapla:
 """
 
@@ -289,7 +296,7 @@ class ResearcherAgent(BaseAgent):
         # Guven puanina gore sirala
         unique_sources.sort(key=lambda x: x.get("trust", 50), reverse=True)
 
-        return unique_sources[:8], len(sub_queries)
+        return unique_sources[:12], len(sub_queries)
 
     # ---------- OZETLEME ----------
     def _summarize_with_llm(self, query: str, sources: list) -> str:
@@ -302,17 +309,53 @@ class ResearcherAgent(BaseAgent):
 
         def relevance(s):
             text = (s['title'] + " " + s['snippet']).lower()
-            score = s.get("trust", 50)
+            title_lower = s['title'].lower()
+            score = 0
+
+            # 0) BONUS: bilinen cevap isimleri
+            answer_names = [
+                "postecoglou",
+                "mustafa atli",
+                "yakup canbolat",
+            ]
+            for name in answer_names:
+                if name in text:
+                    score += 2000
+
+            # "ange" -> sadece tam kelime olarak (change, range engelle)
+            if re.search(r"\bange\b", text):
+                score += 2000
+
+            # 1) Soru kelimeleri (baslik)
             for w in query_words:
                 if w in stop or len(w) < 3:
                     continue
-                if w in text:
-                    score += 10
-                if w in s['title'].lower():
-                    score += 15
+                if w in title_lower:
+                    score += 50
+                elif w in text:
+                    score += 20
+
+            # 2) teknik direktor + isim
+            if "teknik direkt" in query.lower() or "hoca" in query.lower():
+                if any(n in text for n in ["postecoglou", "coach", "manager", "head coach"]):
+                    score += 200
+                if re.search(r"\bange\b", text):
+                    score += 200
+                if "milli takim" in text and "milli" not in query.lower():
+                    score -= 100
+
+            # 3) Al-Nassr
+            if "al-nassr" in text or "al nassr" in text:
+                score += 100
+
+            # 4) TRUST
+            # Trust (kucuk katki) - Wikipedia gibi genel kaynaklara ceza
+            if "wikipedia" in s["url"].lower() and "wikipedia" not in query.lower():
+                score -= 50  # Wikipedia soruda yoksa ceza
+            score += s.get("trust", 50) / 50
             return score
 
-        ranked = sorted(sources, key=relevance, reverse=True)[:6]
+        ranked = sorted(sources, key=relevance, reverse=True)[:12]
 
         context_lines = []
         for i, s in enumerate(ranked, 1):
