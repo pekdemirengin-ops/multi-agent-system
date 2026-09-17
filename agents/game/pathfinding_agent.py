@@ -191,9 +191,19 @@ class PathfindingAgent(BaseAgent):
 
     @staticmethod
     def _parse_text(text: str) -> dict[str, Any]:
-        """Metinden parametreleri parse etmeye calisir."""
+        """Metinden parametreleri parse etmeye calisir (JSON veya regex)."""
+        import json
         import re
 
+        # 1) JSON parse dene
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict) and "grid" in data and "start" in data and "goal" in data:
+                return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # 2) Regex ile parse et
         params: dict[str, Any] = {}
 
         # Grid boyutu (5x5 gibi)
