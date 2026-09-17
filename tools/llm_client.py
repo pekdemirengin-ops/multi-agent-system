@@ -1,8 +1,8 @@
-"""Groq LLM istemcisi."""
+"""Groq LLM istemcisi - streaming destekli."""
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Iterator
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -30,7 +30,7 @@ class GroqLLMClient:
         self.model = model or DEFAULT_MODEL
 
     def chat(self, prompt: str, system: str | None = None) -> str:
-        """Tek seferlik sohbet."""
+        """Tek seferlik sohbet (normal)."""
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -43,6 +43,25 @@ class GroqLLMClient:
             max_tokens=2048,
         )
         return response.choices[0].message.content or ""
+
+    def chat_stream(self, prompt: str, system: str | None = None) -> Iterator[str]:
+        """Streaming sohbet - token token dondurur."""
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.1,
+            max_tokens=2048,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
 
     def chat_with_tools(
         self,

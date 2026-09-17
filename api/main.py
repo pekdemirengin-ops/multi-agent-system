@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import agents, auth, health, memory, security, team, ws
+from api.routes import agents, auth, health, memory, security, stream, team, ws
 
 logger = structlog.get_logger(__name__)
 
@@ -55,6 +55,7 @@ app.include_router(team.router)
 app.include_router(ws.router)
 app.include_router(memory.router)
 app.include_router(security.router)
+app.include_router(stream.router)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
