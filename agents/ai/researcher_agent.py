@@ -13,24 +13,32 @@ from tools.web_search import search
 logger = structlog.get_logger(__name__)
 
 
-SUMMARY_PROMPT = """Sen bir arastirma asistanisin. Sana web arama sonuclari verilecek.
-Bu sonuclara gore soruyu KISA ve NET cevapla.
+SUMMARY_PROMPT = """Web arama sonuclarindan KISA cevap cikar.
 
-KRITIK KURALLAR:
-1. SADECE verilen kaynaklardaki bilgileri kullan
-2. Kaynakta olmayan bilgiyi EKLEME
-3. Cevap 1-3 cumle olsun, uzun aciklama YAPMA
-4. Ilk cumlede dogrudan cevabi ver
-5. Kaynak URL'lerini YAZMA
-6. Markdown kullanma (**, ##, vs.)
-7. Sayilar ve tarihleri oldugu gibi yaz
+MUTLAK KURALLAR:
+- MAKSIMUM 2-3 CUMLE. Asla 4 cumleyi gecme.
+- Ilk cumlede dogrudan cevabi ver.
+- Detay, tarihce, gerekce YAZMA.
+- SADECE kaynaklardaki bilgiyi kullan. Uydurma YAPMA.
+- URL, markdown, basli sayilar YAZMA.
+- Sayilari ve ozel isimleri oldugu gibi koru.
+- Soruda birden fazla bilgi isteniyorsa (X ve Y, X nerede Y kim), HEPSINI cevapla.
+- Eger soruda "ve" varsa, her iki parcayi da cevapla.
 
-Ornek:
+Ornek 1 (tek bilgi):
 Soru: Kozan belediye baskani kim?
-Kaynaklar: [Mustafa Atli 2024'te secildi...]
+Kaynaklar: [Mustafa Atli, 2024 MHP]
 Cevap: Kozan Belediye Baskani Mustafa Atli'dir. 2024 yerel secimlerinde MHP'den secilmistir.
 
-Simdi sira sende:
+Ornek 2 (coklu bilgi):
+Soru: Cristiano Ronaldo hangi takimda ve teknik direktoru kim?
+Kaynaklar: [Ronaldo Al-Nassr'da. Ange Postecoglou Al-Nassr teknik direktorluk gorevine getirildi.]
+Cevap: Cristiano Ronaldo Al-Nassr'da oynamaktadir. Al-Nassr'in teknik direktoru Ange Postecoglou'dur.
+
+Ornek 3 (kaynakta bilgi yoksa):
+Soru: X kisisi nerede yasiyor?
+Kaynaklar: [X kisisi hakkinda bilgi var ama yasadigi yer yok]
+Cevap: X kisisi hakkinda bilgi bulundu ancak yasadigi yer kaynaklarda yer almamaktadir.
 """
 
 
