@@ -1,6 +1,7 @@
-"""Arastirma agent'i - web arama + LLM ozetleme."""
+"""Arastirma agent'i - coklu arama + baglam + LLM ozetleme."""
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -13,37 +14,55 @@ from tools.web_search import search
 logger = structlog.get_logger(__name__)
 
 
-SUMMARY_PROMPT = """Web arama sonuclarindan KISA cevap cikar.
+# ============================================================
+# Sistem promptu - "uzman arastirmaci" gibi dusun
+# ============================================================
+SUMMARY_PROMPT = """Sen uzman bir arastirma asistanisin. Kullanici bir soru soracak,
+sen web arama sonuclarindan EKSIKSIZ, HIZLI ve DOGRU cevap vereceksin.
+
+ADIM ADIM DUSUN (kafandan, yazma):
+1. Soruda kac bilgi isteniyor? (ornek: "Ronaldo kim, hangi takim, hoca kim" = 3 bilgi)
+2. Her bilgi icin kaynaklarda ne var?
+3. Hepsi cevaplanabiliyor mu?
 
 MUTLAK KURALLAR:
-- MAKSIMUM 2-3 CUMLE. Asla 4 cumleyi gecme.
-- Ilk cumlede dogrudan cevabi ver.
-- Detay, tarihce, gerekce YAZMA.
-- SADECE kaynaklardaki bilgiyi kullan. Uydurma YAPMA.
-- URL, markdown, basli sayilar YAZMA.
+- Sorudaki HER parca icin cevap ver. Hicbirini atlama.
+- Cevap maksimum 4 cumle olsun. Uzatma, gerekce yazma.
+- Kaynakta olmayan bilgiyi YAZMA. Uydurma YAPMA.
+- Baglami koru:
+  * "Al-Nassr'in teknik direktoru" -> KULUP hocasi
+  * "Portekiz milli takiminin hocasi" -> MILLI TAKIM hocasi
+  * Soru bir kulupten bahsediyorsa, MILLI TAKIM bilgisi kullanma
+- Bilgi kaynaklarda yoksa: "X bilgisi kaynaklarda yer almamaktadir" de.
+- URL, markdown (**), basli sayilar (1. 2.) YAZMA.
 - Sayilari ve ozel isimleri oldugu gibi koru.
-- Soruda birden fazla bilgi isteniyorsa (X ve Y, X nerede Y kim), HEPSINI cevapla.
-- Eger soruda "ve" varsa, her iki parcayi da cevapla.
 
-Ornek 1 (tek bilgi):
-Soru: Kozan belediye baskani kim?
-Kaynaklar: [Mustafa Atli, 2024 MHP]
-Cevap: Kozan Belediye Baskani Mustafa Atli'dir. 2024 yerel secimlerinde MHP'den secilmistir.
+ORNEK 1 (coklu bilgi):
+Soru: Cristiano Ronaldo kimdir, hangi takimda oynuyor, teknik direktoru kim?
+Kaynaklar: [Ronaldo 1985 Portekiz. Al-Nassr'da oynuyor. Ange Postecoglou Al-Nassr hocasi.]
+Cevap: Cristiano Ronaldo, 1985 dogumlu Portekizli futbolcudur. Al-Nassr takiminda oynamaktadir. Takimin teknik direktoru Ange Postecoglou'dur.
 
-Ornek 2 (coklu bilgi):
-Soru: Cristiano Ronaldo hangi takimda ve teknik direktoru kim?
-Kaynaklar: [Ronaldo Al-Nassr'da. Ange Postecoglou Al-Nassr teknik direktorluk gorevine getirildi.]
-Cevap: Cristiano Ronaldo Al-Nassr'da oynamaktadir. Al-Nassr'in teknik direktoru Ange Postecoglou'dur.
+ORNEK 2 (tek bilgi):
+Soru: Python nedir?
+Kaynaklar: [Python 1991 Guido van Rossum yuksek seviyeli dil]
+Cevap: Python, 1991'de Guido van Rossum tarafindan gelistirilen yuksek seviyeli bir programlama dilidir.
 
-Ornek 3 (kaynakta bilgi yoksa):
+ORNEK 3 (baglam - kulup):
+Soru: Ronaldo'nun teknik direktoru kim?
+Kaynaklar: [Al-Nassr hocasi Ange Postecoglou. Portekiz milli takimi hocasi Jorge Jesus.]
+Cevap: Cristiano Ronaldo'nun kulubu Al-Nassr'in teknik direktoru Ange Postecoglou'dur.
+
+ORNEK 4 (bilgi eksik):
 Soru: X kisisi nerede yasiyor?
-Kaynaklar: [X kisisi hakkinda bilgi var ama yasadigi yer yok]
+Kaynaklar: [X hakkinda bilgi var, yasadigi yer yok]
 Cevap: X kisisi hakkinda bilgi bulundu ancak yasadigi yer kaynaklarda yer almamaktadir.
+
+Simdi cevap ver:
 """
 
 
 class ResearcherAgent(BaseAgent):
-    """Web'de arastirir, LLM ile ozetler."""
+    """Web'de arastirir, coklu arama yapar, LLM ile ozetler."""
 
     def __init__(
         self,
@@ -57,8 +76,33 @@ class ResearcherAgent(BaseAgent):
         self.use_llm_summary = use_llm_summary
         self.llm = GroqLLMClient() if use_llm_summary else None
 
+    def _split_query(self, query: str) -> list[str]:
+        """Soruyu alt sorulara boler. 've' ile ayrilanlari ayirir."""
+        lower = query.lower()
+        parts = []
+        # " ve " ile bol
+        if " ve " in lower:
+            raw_parts = re.split(r"\s+ve\s+", query, flags=re.IGNORECASE)
+            parts = [p.strip() for p in raw_parts if p.strip()]
+        # " , " ile bol (virgul + ve olmadan)
+        elif query.count(",") >= 1:
+            raw_parts = [p.strip() for p in query.split(",") if p.strip()]
+            if len(raw_parts) >= 2:
+                parts = raw_parts
+        else:
+            parts = [query]
+
+        # 1'den azsa, ana sorgu
+        if len(parts) < 2:
+            return [query]
+
+        # Son parcaya baglam ekle (ilk parcanin konusu)
+        # Ornek: "Ronaldo kim, hangi takimda, hoca kim" -> 3 parca
+        # Ilk parcayi referans olarak kullan
+        return parts
+
     def _enrich_query(self, query: str) -> str:
-        """Sorguyu zenginlestirir (yil ekler)."""
+        """Yil ekler (guncel bilgi icin)."""
         current_year = datetime.now().year
         if any(str(y) in query for y in range(current_year - 2, current_year + 2)):
             return query
@@ -67,21 +111,17 @@ class ResearcherAgent(BaseAgent):
             return f"{query} {current_year}"
         return query
 
-    def _summarize_with_llm(self, query: str, sources: list[dict]) -> str:
-        """Web sonuclarini LLM ile ozetler."""
+    def _summarize_with_llm(self, query: str, sources: list) -> str:
+        """Kaynaklari LLM ile ozetler."""
         if not self.llm or not sources:
             return ""
-
-        # Kaynaklari birlestir
         context_lines = []
         for i, s in enumerate(sources, 1):
             context_lines.append(f"Kaynak {i}: {s['title']}")
             context_lines.append(f"Icerik: {s['snippet']}")
             context_lines.append("")
-
         context = "\n".join(context_lines)
         prompt = f"Soru: {query}\n\nKaynaklar:\n{context}\n\nCevap:"
-
         try:
             answer = self.llm.chat(prompt=prompt, system=SUMMARY_PROMPT)
             return answer.strip()
@@ -89,33 +129,53 @@ class ResearcherAgent(BaseAgent):
             logger.exception("researcher.summary_failed", error=str(e))
             return ""
 
+    def _collect_sources(self, query: str) -> tuple[list[dict], int]:
+        """Tek veya coklu arama yapar, kaynaklari doner."""
+        sub_queries = self._split_query(query)
+        all_sources = []
+
+        if len(sub_queries) > 1:
+            logger.info("researcher.multi_search", count=len(sub_queries), queries=sub_queries)
+            # Her alt soru icin ayri arama
+            for sq in sub_queries:
+                enriched = self._enrich_query(sq)
+                found = search(enriched, max_results=3)
+                all_sources.extend(found)
+        else:
+            enriched = self._enrich_query(query)
+            all_sources = search(enriched, max_results=self.max_search_results)
+
+        # Tekrarlari temizle (URL bazli)
+        seen_urls = set()
+        unique_sources = []
+        for s in all_sources:
+            if s["url"] not in seen_urls:
+                seen_urls.add(s["url"])
+                unique_sources.append(s)
+
+        # Max 8 kaynak
+        return unique_sources[:8], len(sub_queries)
+
     async def handle(self, message: Message) -> None:
         if message.msg_type != "task":
             return
 
         query = str(message.content)
-        enriched = self._enrich_query(query)
-        logger.info("researcher.start", query=query[:80], enriched=enriched[:80])
+        logger.info("researcher.start", query=query[:80])
 
         try:
-            sources = search(enriched, max_results=self.max_search_results)
+            sources, sub_count = self._collect_sources(query)
 
             if not sources:
                 answer = "Bu konuda web'de guvenilir bir sonuc bulunamadi."
             else:
-                # LLM ile ozetle
                 summary = self._summarize_with_llm(query, sources)
-
                 if summary:
                     answer = summary
                 else:
-                    # LLM ozetleme basarisizsa ham sonucu goster (eski davranis)
+                    # LLM yoksa ham sonuc
                     today = datetime.now().strftime("%Y-%m-%d")
-                    lines = [
-                        f"{today} itibariyle web arama sonuclari:",
-                        f"Sorgu: {enriched}",
-                        "",
-                    ]
+                    lines = [f"{today} itibariyle web arama sonuclari:", f"Sorgu: {query}", ""]
                     for i, s in enumerate(sources, 1):
                         lines.append(f"{i}. {s['title']}")
                         lines.append(f"   {s['snippet']}")
@@ -129,17 +189,17 @@ class ResearcherAgent(BaseAgent):
                     "research": answer,
                     "sources": [{"title": s["title"], "url": s["url"]} for s in sources],
                     "query": query,
-                    "enriched_query": enriched,
                     "source_count": len(sources),
                     "summarized": bool(self.llm and sources),
+                    "multi_search": sub_count > 1,
                 },
                 msg_type="result",
             )
-            logger.info("researcher.done", sources=len(sources), summarized=bool(self.llm))
+            logger.info("researcher.done", sources=len(sources), multi_search=sub_count > 1)
 
         except Exception as e:
             logger.exception("researcher.error", error=str(e))
             await self.send(message.sender, {"error": str(e)}, msg_type="error")
 
     def __repr__(self) -> str:
-        return f"<ResearcherAgent name={self.name!r} (llm-summary={self.use_llm_summary})>"
+        return f"<ResearcherAgent name={self.name!r} (multi-search, llm-summary)>"
