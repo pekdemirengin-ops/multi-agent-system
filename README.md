@@ -9,32 +9,81 @@ Moduler, dagitik multi-agent sistemi. FastAPI + WebSocket + Redis + Docker + LLM
 **[multi-agent-system-production-9301.up.railway.app](https://multi-agent-system-production-9301.up.railway.app)**
 
 - Giris: `admin` / `admin123`
-- 8 agent, web arayuzu, mobil uyumlu
+- **15 agent**, web arayuzu, mobil uyumlu
+- **Multi-user:** Kayit ol, giris yap, rol yonetimi (admin/user)
+- **Admin paneli:** Kullanici listesi, rol degistirme, silme
 - Sesli kullanim (MIC + TTS)
-- Sohbet gecmisi (kalici volume)
+- **Streaming:** SSE ile kelime kelime cevap
+- **Guvenlik modu:** Log tarama (15+ tehdit)
+- Sohbet gecmisi (PostgreSQL + kalici volume)
+
+
+## Istatistikler
+
+| Metrik | Deger |
+|--------|-------|
+| Agent sayisi | **15** |
+| API endpoint | **11** |
+| Web modu | **5** (Auto, CANLI, GUVENLIK, MIC, SES) |
+| Test | **80** (pytest + async) |
+| Commit | **73+** |
+| Veritabani | **PostgreSQL + SQLite fallback** |
+| Deploy | **Railway (otomatik)** |
+| Auth | **JWT + rol sistemi** |
+| Guvenlik | **15+ tehdit pattern** |
+| Streaming | **SSE (kelime kelime)** |
+
+## API Endpoints
+
+### Auth
+- `POST /api/auth/register` - Yeni kullanici kaydi
+- `POST /api/auth/login` - Giris (JWT doner)
+- `GET  /api/auth/me` - Mevcut kullanici bilgisi
+- `GET  /api/auth/users` - Kullanici listesi (admin)
+- `DELETE /api/auth/users/{username}` - Kullanici sil (admin)
+- `PATCH /api/auth/users/{username}/role` - Rol guncelle (admin)
+
+### Agent
+- `GET  /api/agents` - Agent listesi
+- `POST /api/ask` - Agent'a soru sor
+- `POST /api/stream` - Streaming cevap (SSE)
+- `POST /api/team` - Multi-agent pipeline
+
+### Sistem
+- `GET  /api/health` - Sistem sagligi
+- `GET  /api/memory/stats` - Hafiza istatistikleri
+- `GET  /api/security/scan` - Log tarama
 
 ## Ozellikler
 
 ### AI & Agent
-- **8 Agent:** researcher, llm, system, coder, planner, reviewer, summarizer, router
+- **15 Agent:** researcher, llm, coder, planner, reviewer, summarizer, router, system, log_watcher, alert, email, approval, npc, pathfinder, api_collector
 - **Hibrit Router:** Regex (0ms) + LLM fallback
+- **Akilli Arastirma:** LLM'siz + yil ekleme + agresif puanlama
 - **RAG:** Web search (ddgs) + LLM ozetleme
 - **Kod Calistirma:** LLM kod yazar, guvenli sandbox'ta calistirir
 - **Sistem Izleme:** CPU, RAM, disk, uptime
 - **Multi-Agent Pipeline:** Planner + N agent isbirligi (`/api/team`)
+- **Game AI:** NPC (kisilik) + Pathfinding (A*)
+- **Security Agent:** LogWatcher + Alert (15+ tehdit pattern)
 
 ### Backend
-- **FastAPI:** REST + WebSocket
-- **JWT Authentication:** Token bazli guvenli erisim
+- **FastAPI:** REST + WebSocket + SSE streaming
+- **JWT Authentication:** Token bazli guvenli erisim (role claim)
+- **Multi-User:** Kayit, giris, rol sistemi (admin/user)
+- **Admin API:** Kullanici listesi, silme, rol guncelleme
 - **Rate Limiting:** 30 istek/dk (kullanici bazli)
 - **Input Validation:** Bos/tehlikeli mesaj reddi
 - **CORS:** Kisitlanmis origin'ler
-- **SQLite Hafiza:** Konusma gecmisi
+- **PostgreSQL + SQLite fallback:** Konusma + kullanici deposu
 - **Redis Bus:** Dagitik mesajlasma (opsiyonel)
+- **Kalici Kullanici Deposu:** bcrypt + PostgreSQL
 
 ### Frontend
 - **Modern Chat UI:** HTML/CSS/JS
+- **Admin Paneli:** Kullanici yonetimi (liste, rol, sil)
 - **Login/Register:** JWT token yonetimi
+- **5 Web Modu:** Auto, CANLI (streaming), GUVENLIK, MIC, SES
 - **Sohbet Gecmisi:** Otomatik yukleme
 - **Sesli Kullanim:** Web Speech API (STT + TTS)
 - **Mobil Uyumlu:** Responsive tasarim
@@ -42,8 +91,10 @@ Moduler, dagitik multi-agent sistemi. FastAPI + WebSocket + Redis + Docker + LLM
 ### DevOps
 - **Docker:** `docker compose up` ile tek komut
 - **Railway:** Otomatik deploy (GitHub webhook)
-- **Kalici Volume:** 500 MB (SQLite)
+- **PostgreSQL:** Production veritabani (Railway managed)
+- **Kalici Volume:** 500 MB (SQLite fallback + data)
 - **CI/CD:** GitHub Actions
+- **Test Suite:** 80 test (pytest + async)
 - **Healthcheck:** Docker + Railway
 
 ## Agent'lar
