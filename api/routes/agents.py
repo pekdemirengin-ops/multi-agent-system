@@ -21,6 +21,7 @@ from agents.ai import (
 from agents.devops import SystemAgent
 from agents.security import AlertAgent, LogWatcherAgent
 from agents.workflow import ApprovalAgent, EmailAgent
+from agents.game import NPCAgent, PathfindingAgent
 from api.routes.auth import get_optional_user
 from api.schemas import AgentInfo, AgentsResponse, AskRequest, AskResponse, Source
 from core.base_agent import BaseAgent, Message
@@ -84,6 +85,8 @@ async def init_agents() -> None:
             "alert": AlertAgent("alert", _bus),
             "email": EmailAgent("email", _bus),
             "approval": ApprovalAgent("approval", _bus),
+            "npc": NPCAgent("npc", _bus, personality="friendly"),
+            "pathfinder": PathfindingAgent("pathfinder", _bus),
         }
     )
 
