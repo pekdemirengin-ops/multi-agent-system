@@ -65,6 +65,15 @@ Soru: X kisisi nerede yasiyor?
 Kaynaklar: [X hakkinda bilgi var, yasadigi yer yok]
 Cevap: X kisisi hakkinda bilgi bulundu ancak yasadigi yer kaynaklarda yer almamaktadir.
 
+
+SON KONTROL (CEVAP YAZMADAN ONCE):
+- Her "kim" sorusu icin TUM kaynaklari son kez kontrol et.
+- Kaynak BASLIGI ilgili ise (ornek: "yeni teknik direktoru belli oldu"),
+  ICERIGI OKU ve cevaba EKLE.
+- Yarim isimler YAZMA (ornek: "Jorge..." yerine tam ismi bul).
+- Kaynaklar arasinda CELISKI varsa (kulup vs milli takim),
+  SORUYA EN UYGUN olani sec.
+
 Simdi sen cevapla:"""
 
 
@@ -127,16 +136,50 @@ class ResearcherAgent(BaseAgent):
         return query
 
     def _summarize_with_llm(self, query: str, sources: list) -> str:
-        """Kaynaklari LLM ile ozetler."""
+        """Kaynaklari LLM ile ozetler. Kaynaklari alakaya gore siralar."""
         if not self.llm or not sources:
             return ""
+
+        # Soru kelimeleri (alaka puanlamasi icin)
+        query_words = set(re.findall(r"\w+", query.lower()))
+
+        # Alakasiz kelimeler
+        stop = {"kim", "kimdir", "nerede", "ne", "zaman", "hangi", "kac",
+                "ve", "mi", "mu", "midir", "mudur", "the", "bir"}
+
+        def relevance(s):
+            """Kaynak alakasini puanla (0-100)."""
+            text = (s['title'] + " " + s['snippet']).lower()
+            score = 0
+            for w in query_words:
+                if w in stop or len(w) < 3:
+                    continue
+                if w in text:
+                    score += 10
+            # Baslik eslesmesi ekstra puan
+            for w in query_words:
+                if w in stop or len(w) < 3:
+                    continue
+                if w in s['title'].lower():
+                    score += 15
+            return score
+
+        # Kaynaklari alakaya gore sirala
+        ranked = sorted(sources, key=relevance, reverse=True)
+
+        # Ilk 5 kaynagi al (daha fazla olursa LLM kaybolur)
+        top = ranked[:5]
+
         context_lines = []
-        for i, s in enumerate(sources, 1):
-            context_lines.append(f"Kaynak {i}: {s['title']}")
-            context_lines.append(f"Icerik: {s['snippet'][:2000]}")
+        for i, s in enumerate(top, 1):
+            context_lines.append(f"[KAYNAK {i}]")
+            context_lines.append(f"Baslik: {s['title']}")
+            context_lines.append(f"Icerik: {s['snippet'][:1500]}")
+            context_lines.append(f"URL: {s['url'][:100]}")
             context_lines.append("")
+
         context = "\n".join(context_lines)
-        prompt = f"Soru: {query}\n\nKaynaklar:\n{context}\n\nCevap:"
+        prompt = f"Soru: {query}\n\n{context}\n\nCevap (max 4 cumle):"
         try:
             answer = self.llm.chat(prompt=prompt, system=SUMMARY_PROMPT)
             return answer.strip()
