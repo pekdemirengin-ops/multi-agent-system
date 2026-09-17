@@ -166,20 +166,35 @@ class ResearcherAgent(BaseAgent):
 
     def _is_insufficient(self, answer: str) -> bool:
         """Cevap yetersiz mi? ('kaynakta yok' diyorsa True)."""
-        lower = answer.lower()
+        # Turkce karakterleri ASCII'ye cevir
+        tr_map = str.maketrans({
+            "c": "c", "g": "g", "i": "i", "o": "o", "s": "s", "u": "u",
+        })
+        # Manuel replace (Türkçe karakterler)
+        answer_ascii = answer.lower()
+        answer_ascii = answer_ascii.replace("ç", "c").replace("ğ", "g")
+        answer_ascii = answer_ascii.replace("ı", "i").replace("ö", "o")
+        answer_ascii = answer_ascii.replace("ş", "s").replace("ü", "u")
+
         insufficient_phrases = [
             "kaynaklarda yer almamaktadir",
-            "kaynaklarda yer almıyor",
+            "kaynaklarda yer almiyor",
             "bilgi bulunamadi",
-            "bilgi bulunamadı",
             "kaynaklarda belirtilmemistir",
-            "kaynaklarda belirtilmemiştir",
             "yer almamaktadir",
-            "yer almıyor",
+            "yer almiyor",
             "bulunmamaktadir",
             "bulunmuyor",
+            "bilgisi kaynaklarda",
+            "isim kaynaklarda",
+            "kaynakta yok",
+            "bilgi yok",
+            "bilinmiyor",
+            "bilgi yer almamaktadir",
+            "yer almamistir",
         ]
-        return any(phrase in lower for phrase in insufficient_phrases)
+        return any(phrase in answer_ascii for phrase in insufficient_phrases)
+
 
     def _summarize_with_llm(self, query: str, sources: list) -> str:
         """Kaynaklari LLM ile ozetler. Kaynaklari alakaya gore siralar."""
