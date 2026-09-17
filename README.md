@@ -8,33 +8,56 @@ Moduler, dagitik multi-agent sistemi. FastAPI + WebSocket + Redis + Docker + LLM
 
 **[multi-agent-system-production-9301.up.railway.app](https://multi-agent-system-production-9301.up.railway.app)**
 
-7 agent, web arayuzu ile. Linke tikla, agent sec, soru sor.
+- Giris: `admin` / `admin123`
+- 8 agent, web arayuzu, mobil uyumlu
+- Sesli kullanim (MIC + TTS)
+- Sohbet gecmisi (kalici volume)
 
 ## Ozellikler
 
-- 7 Agent: researcher, llm, system, coder, planner, reviewer, summarizer
-- Web Arayuzu: Modern chat UI (HTML/CSS/JS)
-- RAG: Web search (ddgs) + LLM ozetleme
-- Kod Calistirma: LLM kod yazar, guvenli sandbox'ta calistirir
-- Sistem Izleme: CPU, RAM, disk, uptime
-- Multi-Agent Pipeline: Planner + N agent isbirligi (/api/team)
-- WebSocket: Canli cevap akisi (/ws/ask)
-- Redis Bus: Dagitik mesajlasma (opsiyonel)
-- Docker: docker compose up ile tek komut
-- Test: 31 pytest + GitHub Actions CI
-- CI/CD: GitHub -> Railway otomatik deploy
+### AI & Agent
+- **8 Agent:** researcher, llm, system, coder, planner, reviewer, summarizer, router
+- **Hibrit Router:** Regex (0ms) + LLM fallback
+- **RAG:** Web search (ddgs) + LLM ozetleme
+- **Kod Calistirma:** LLM kod yazar, guvenli sandbox'ta calistirir
+- **Sistem Izleme:** CPU, RAM, disk, uptime
+- **Multi-Agent Pipeline:** Planner + N agent isbirligi (`/api/team`)
+
+### Backend
+- **FastAPI:** REST + WebSocket
+- **JWT Authentication:** Token bazli guvenli erisim
+- **Rate Limiting:** 30 istek/dk (kullanici bazli)
+- **Input Validation:** Bos/tehlikeli mesaj reddi
+- **CORS:** Kisitlanmis origin'ler
+- **SQLite Hafiza:** Konusma gecmisi
+- **Redis Bus:** Dagitik mesajlasma (opsiyonel)
+
+### Frontend
+- **Modern Chat UI:** HTML/CSS/JS
+- **Login/Register:** JWT token yonetimi
+- **Sohbet Gecmisi:** Otomatik yukleme
+- **Sesli Kullanim:** Web Speech API (STT + TTS)
+- **Mobil Uyumlu:** Responsive tasarim
+
+### DevOps
+- **Docker:** `docker compose up` ile tek komut
+- **Railway:** Otomatik deploy (GitHub webhook)
+- **Kalici Volume:** 500 MB (SQLite)
+- **CI/CD:** GitHub Actions
+- **Healthcheck:** Docker + Railway
 
 ## Agent'lar
 
-| Agent | Gorev |
-|-------|-------|
-| researcher | Web arama + RAG (kaynakli ozet) |
-| llm | Genel LLM sohbeti |
-| system | Sistem izleme (CPU, RAM, disk, uptime) |
-| coder | LLM kod yazar, guvenli sandbox'ta calistirir |
-| planner | Gorevi alt adimlara boler |
-| reviewer | Kod inceleme, iyilestirme onerileri |
-| summarizer | Uzun metinleri ozetler |
+| Agent | Gorev | Ornek |
+|-------|-------|-------|
+| `researcher` | Web arama + RAG | "2026 Dunya Kupasi sampiyonu kim?" |
+| `llm` | Genel LLM sohbet | "Python nedir?" |
+| `system` | Sistem izleme | "CPU ne kadar?" |
+| `coder` | Kod yaz + calistir | "Fibonacci yazdir" |
+| `planner` | Gorevi alt adimlara boler | "X ve Y yap" |
+| `reviewer` | Kod inceleme | "Su kodu incele: ..." |
+| `summarizer` | Ozet cikarma | "Bu metni ozetle: ..." |
+| `router` | Hibrit yonlendirme | (Otomatik) |
 
 ## Hizli Baslangic
 
@@ -58,32 +81,30 @@ uv run uvicorn api.main:app --reload
 
 ## API Kullanimi
 
-### REST
+### Auth
 
-curl -X POST http://localhost:8000/api/ask -H "Content-Type: application/json" -d "{\"message\": \"Python nedir?\", \"agent\": \"researcher\"}"
+# Login
+curl -X POST http://localhost:8000/api/auth/login -H "Content-Type: application/json" -d "{\"username\":\"admin\",\"password\":\"admin123\"}"
 
-### Multi-Agent Pipeline
+# Response: {"access_token": "eyJ...", "token_type": "bearer"}
 
-curl -X POST http://localhost:8000/api/team -H "Content-Type: application/json" -d "{\"message\": \"Python'da asal sayi fonksiyonu yaz ve sistem durumunu raporla\"}"
+### Soru Sor
 
-### WebSocket
+curl -X POST http://localhost:8000/api/ask -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" -d "{\"message\": \"Python nedir?\", \"agent\": \"auto\"}"
 
-const ws = new WebSocket("ws://localhost:8000/ws/ask");
-ws.send(JSON.stringify({message: "Python nedir?", agent: "researcher"}));
-ws.onmessage = (e) => console.log(JSON.parse(e.data));
+### Ornek Sorular
 
-## Ornek Sorular
-
-- researcher: "2024 Nobel Baris Odulu kime verildi?"
-- system: "Sistem durumu nedir?"
-- coder: "1'den 10'a kadar asal sayilari yazdir"
-- summarizer: "Multi-agent system nedir? Kisaca ozetle"
+- `{"message": "2026 Dunya Kupasi sampiyonu kim?", "agent": "auto"}`
+- `{"message": "Fibonacci yazdir", "agent": "auto"}`
+- `{"message": "Sistem durumu nedir?", "agent": "auto"}`
 
 ## Mimari
 
 Kullanici (Web UI / REST / WebSocket)
    |
 FastAPI (api/main.py)
+   |
+Router (regex + LLM)
    |
 MessageBus (in-memory | Redis)
    |
@@ -93,37 +114,42 @@ Groq LLM + Web Search + psutil + subprocess
 
 ## Katmanlar
 
-- core/ - BaseAgent, MessageBus, RedisMessageBus, Registry, Orchestrator
-- agents/ai/ - LLMAgent, PlannerAgent, ResearcherAgent, CoderAgent, ReviewerAgent, SummarizerAgent
+- core/ - BaseAgent, MessageBus, RedisMessageBus, Registry, Auth, Security, Memory
+- agents/ai/ - LLMAgent, PlannerAgent, ResearcherAgent, CoderAgent, ReviewerAgent, SummarizerAgent, RouterAgent
 - agents/devops/ - SystemAgent
 - tools/ - GroqLLMClient, Web Search, Code Runner, System Info
-- api/ - FastAPI routes (REST + WebSocket)
+- api/ - FastAPI routes (REST + WebSocket + Auth)
 - static/ - Web arayuzu (HTML/CSS/JS)
-- tests/ - 31 pytest testleri
-
-## Guvenlik
-
-- .env dosyasi .gitignore'da (API key'ler korunur)
-- CoderAgent kodu AST ile analiz eder (yasakli import/cagri reddi)
-- Sandbox'ta calistirir (timeout, ayrilmis process)
+- tests/ - 39 pytest testleri
 
 ## Teknolojiler
 
-- Backend: Python 3.11, FastAPI, Uvicorn, Pydantic
-- LLM: Groq (openai/gpt-oss-120b)
-- Web Search: ddgs (DuckDuckGo)
-- Database/Cache: Redis
-- Container: Docker, docker-compose
-- CI/CD: GitHub Actions
-- Deploy: Railway
-- Test: pytest, pytest-asyncio
-- Logging: structlog
-- Monitoring: psutil
+- **Backend:** Python 3.11, FastAPI, Uvicorn, Pydantic
+- **LLM:** Groq (openai/gpt-oss-120b, llama-3.1-8b-instant)
+- **Auth:** python-jose (JWT), bcrypt
+- **Web Search:** ddgs
+- **Cache:** Redis (Pub/Sub)
+- **Database:** SQLite (kalici volume)
+- **Container:** Docker, docker-compose
+- **CI/CD:** GitHub Actions
+- **Cloud:** Railway
+- **Test:** pytest, pytest-asyncio
+- **Logging:** structlog
+- **Monitoring:** psutil
+
+## Guvenlik
+
+- JWT authentication (bcrypt sifre hash)
+- Rate limiting (30 istek/dk, kullanici bazli)
+- Input validation (bos/uzun/tehlikeli mesaj reddi)
+- CORS kisitlama
+- .env dosyasi .gitignore'da
+- CoderAgent: AST analizi + sandbox
 
 ## Test
 
 uv run pytest -v
-# 31 passed in ~3s
+# 39 passed in ~7s
 
 ## Lisans
 
