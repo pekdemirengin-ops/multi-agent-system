@@ -4,15 +4,14 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-import uuid
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from core.config import get_settings
+from api.routes.auth import get_optional_user
 from core.memory import get_memory
 from core.security import rate_limiter, validate_message
 from tools.llm_client import GroqLLMClient
@@ -28,17 +27,27 @@ class StreamRequest(BaseModel):
 
 
 @router.post("/stream")
-async def stream_chat(req: StreamRequest, request: Request):
-    """Streaming sohbet - token token akitir.
+async def stream_chat(
+    req: StreamRequest,
+    request: Request,
+    authenticated_user: str | None = Depends(get_optional_user),
+):
+    """Streaming sohbet - token token akitir (SSE)."""
+    # Auth zorunlu (streaming icin)
+    if not authenticated_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Token gerekli",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    Server-Sent Events (SSE) formati kullanir.
-    """
     # Rate limiting
     forwarded = request.headers.get("x-forwarded-for")
     client_ip = forwarded.split(",")[0].strip() if forwarded else (
         request.client.host if request.client else "unknown"
     )
-    rate_key = f"{req.user_id}:{client_ip}"
+    effective_user = authenticated_user or req.user_id
+    rate_key = f"{effective_user}:{client_ip}"
     allowed, remaining = rate_limiter.check(rate_key)
     if not allowed:
         raise HTTPException(status_code=429, detail="Cok fazla istek")
@@ -48,41 +57,34 @@ async def stream_chat(req: StreamRequest, request: Request):
     if not valid:
         raise HTTPException(status_code=400, detail=err)
 
-    # Hafiza: user mesajini kaydet
+    # Hafiza
     memory = await get_memory()
-    await memory.save_message(req.user_id, "user", req.message)
-    history_text = await memory.format_for_llm(req.user_id, limit=10)
+    await memory.save_message(effective_user, "user", req.message)
+    history_text = await memory.format_for_llm(effective_user, limit=10)
 
-    # LLM client
     llm = GroqLLMClient()
     system = req.system_prompt or (
         "Sen yardimci bir AI asistansin. Turkce, net ve faydali cevap ver."
     )
 
     async def generate():
-        """SSE stream."""
         full_answer = ""
         start = time.perf_counter()
 
         try:
-            # Baslangic eventi
-            yield f"data: {json.dumps({'type': 'start', 'message': req.message})}\n\n"
+            yield f"data: {json.dumps({'type': 'start'})}\n\n"
 
-            # Prompt (hafiza ile)
             if history_text:
                 prompt = f"{history_text}\n\n---\n\nKullanici: {req.message}"
             else:
                 prompt = req.message
 
-            # Streaming
             for token in llm.chat_stream(prompt=prompt, system=system):
                 full_answer += token
                 yield f"data: {json.dumps({'type': 'chunk', 'content': token})}\n\n"
-                # Kucuk gecikme - UI render
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(0.005)
 
-            # Hafiza: cevabi kaydet
-            await memory.save_message(req.user_id, "assistant", full_answer, agent="llm")
+            await memory.save_message(effective_user, "assistant", full_answer, agent="llm")
 
             duration_ms = int((time.perf_counter() - start) * 1000)
             yield f"data: {json.dumps({'type': 'done', 'duration_ms': duration_ms, 'length': len(full_answer)})}\n\n"
