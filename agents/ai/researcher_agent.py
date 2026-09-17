@@ -231,6 +231,7 @@ class ResearcherAgent(BaseAgent):
 
     # ---------- FOLLOW-UP SORGULAR ----------
     def _generate_followup_queries(self, query: str) -> list[str]:
+        """Ilk aramada bulunamayan bilgiler icin alternatif sorgular uretir."""
         followups = []
         lower = query.lower()
 
@@ -244,11 +245,38 @@ class ResearcherAgent(BaseAgent):
                         subject_words.append(clean)
             subject = " ".join(subject_words[:2]) if subject_words else ""
 
-            if subject:
+            clubs = ["al-nassr", "al nassr", "galatasaray", "fenerbahce", "besiktas", "real madrid", "barcelona", "manchester"]
+            found_club = None
+            for c in clubs:
+                if c in lower:
+                    found_club = c
+                    break
+
+            person_club_map = {
+                "ronaldo": "Al-Nassr",
+                "messi": "Inter Miami",
+                "neymar": "Al-Hilal",
+                "mbappe": "Real Madrid",
+                "haaland": "Manchester City",
+            }
+            detected_club = found_club
+            if not detected_club and subject:
+                subject_lower = subject.lower()
+                for person, club in person_club_map.items():
+                    if person in subject_lower:
+                        detected_club = club
+                        break
+
+            if detected_club:
+                followups.append(f"{detected_club} new manager 2026")
+                followups.append(f"{detected_club} head coach 2026")
+                followups.append(f"{detected_club} teknik direktoru kim")
+                if subject:
+                    followups.append(f"{subject} {detected_club} coach")
+            elif subject:
                 followups.append(f"{subject} new manager 2026")
                 followups.append(f"{subject} coach who 2026")
                 followups.append(f"{subject} teknik direktoru ismi")
-                followups.append(f"who is {subject} manager 2026")
 
         elif "kim" in lower or "kimdir" in lower:
             subject = re.sub(r"\b(kim|kimdir|nerede|ne zaman|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
@@ -260,7 +288,7 @@ class ResearcherAgent(BaseAgent):
             followups.append(f"{subject} resmi aciklama 2026")
             followups.append(f"{subject} 2026 son dakika")
 
-        return followups[:4]
+        return followups[:5]
 
     # ---------- KAYNAK TOPLAMA (COKLU SORGU + GUVEN PUANI) ----------
     def _collect_sources(self, query: str) -> tuple[list[dict], int]:
