@@ -292,27 +292,34 @@ class ResearcherAgent(BaseAgent):
 
     # ---------- KAYNAK TOPLAMA (COKLU SORGU + GUVEN PUANI) ----------
     def _collect_sources(self, query: str) -> tuple[list[dict], int]:
-        """Coklu sorgu ile kaynak toplar, guven puanina gore siralar."""
+        """Tek veya coklu arama yapar. PARALEL arama."""
         sub_queries = self._split_query(query)
         all_sources = []
 
+        all_queries = []
         if len(sub_queries) > 1:
             logger.info("researcher.multi_search", count=len(sub_queries), queries=sub_queries)
             for sq in sub_queries:
-                # Her alt soru icin 2-3 farkli sorgu
                 multi = self._generate_multi_queries(sq)
-                for mq in multi:
-                    enriched = self._enrich_query(mq)
-                    found = search(enriched, max_results=3)
-                    all_sources.extend(found)
+                all_queries.extend(multi[:2])
         else:
             multi = self._generate_multi_queries(query)
-            for mq in multi:
-                enriched = self._enrich_query(mq)
-                found = search(enriched, max_results=3)
-                all_sources.extend(found)
+            all_queries.extend(multi[:2])
 
-        # Tekrarlari temizle + guven puani ekle
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _do_search(q):
+            enriched = self._enrich_query(q)
+            return search(enriched, max_results=3)
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(_do_search, q) for q in all_queries]
+            for future in as_completed(futures):
+                try:
+                    all_sources.extend(future.result())
+                except Exception as e:
+                    logger.warning("researcher.parallel_search_error", error=str(e))
+
         seen_urls = set()
         unique_sources = []
         for s in all_sources:
@@ -321,12 +328,9 @@ class ResearcherAgent(BaseAgent):
                 s["trust"] = _source_trust(s["url"])
                 unique_sources.append(s)
 
-        # Guven puanina gore sirala
         unique_sources.sort(key=lambda x: x.get("trust", 50), reverse=True)
+        return unique_sources[:12], len(sub_queries)
 
-        return unique_sources[:8], len(sub_queries)
-
-    # ---------- OZETLEME ----------
     def _summarize_with_llm(self, query: str, sources: list) -> str:
         if not self.llm or not sources:
             return ""
