@@ -132,6 +132,7 @@ button.send { padding: 10px 14px; font-size: 13px; }
 </div>
 <div class="header-controls">
 <span class="user-info" id="userInfo">admin</span>
+<button class="header-btn" id="streamingToggle" title="Canli akis modu">CANLI</button>
 <button class="header-btn active" id="ttsToggle" title="Sesli okuma">SES</button>
 <button class="header-btn" onclick="logout()" title="Cikis">Cikis</button>
 </div>
@@ -158,6 +159,7 @@ const API_BASE = window.location.origin;
 let currentAgent = "auto";
 let isProcessing = false;
 let ttsEnabled = true;
+let streamingEnabled = false;
 let recognition = null;
 let isListening = false;
 let token = localStorage.getItem("token") || null;
@@ -279,6 +281,16 @@ window.speechSynthesis.speak(utter);
 }
 
 function stopSpeaking() { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); }
+const streamingToggle = document.getElementById("streamingToggle");
+if (streamingToggle) {
+streamingToggle.onclick = () => {
+streamingEnabled = !streamingEnabled;
+streamingToggle.classList.toggle("active", streamingEnabled);
+statusText.textContent = streamingEnabled ? "Canli mod ACIK" : "Canli mod KAPALI";
+setTimeout(() => { statusText.textContent = "Hazir"; }, 2000);
+};
+}
+
 ttsToggle.onclick = () => {
 ttsEnabled = !ttsEnabled;
 ttsToggle.classList.toggle("active", ttsEnabled);
@@ -291,17 +303,17 @@ if (!ttsEnabled) stopSpeaking();
 const SPEECH_CORRECTIONS = [
 [/\bfayton\b/gi, "python"],
 [/\bpiton\b/gi, "python"],
-[/\bpayt[ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±i]n\b/gi, "python"],
-[/\bfayt[ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±i]n\b/gi, "python"],
+[/\bpayt[ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±i]n\b/gi, "python"],
+[/\bfayt[ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±i]n\b/gi, "python"],
 [/\bcava\s*skript\b/gi, "javascript"],
 [/\bjava\s*skript\b/gi, "javascript"],
 [/\bcavaskript\b/gi, "javascript"],
 [/\bfibonachi\b/gi, "fibonacci"],
-[/\bfibona[ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§c]i\b/gi, "fibonacci"],
+[/\bfibona[ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬ÂÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§c]i\b/gi, "fibonacci"],
 [/\bsitem\b/gi, "system"],
 [/\bsistem\b/gi, "system"],
 [/\bsamari[sz]er\b/gi, "summarizer"],
-[/\bara[ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸s]t[ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±i]r\b/gi, "arastir"],
+[/\bara[ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸s]t[ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±i]r\b/gi, "arastir"],
 [/\bne\s*dir\b/gi, "nedir"],
 [/\bmeraba\b/gi, "merhaba"],
 ];
@@ -467,23 +479,27 @@ sendBtn.disabled = true;
 stopSpeaking();
 messageInput.value = "";
 addMessage(message, "user");
+if (streamingEnabled) {
+await sendMessageStreaming(message);
+} else {
+await sendMessageNormal(message);
+}
+isProcessing = false;
+sendBtn.disabled = false;
+messageInput.focus();
+}
 
+async function sendMessageNormal(message) {
 const loadingDiv = document.createElement("div");
 loadingDiv.className = "message assistant";
 loadingDiv.textContent = "Dusunuyor...";
 chat.appendChild(loadingDiv);
 chat.scrollTop = chat.scrollHeight;
-
 try {
 const res = await fetch(`${API_BASE}/api/ask`, {
 method: "POST",
 headers: authHeaders(),
-body: JSON.stringify({
-message: message,
-agent: currentAgent,
-timeout: 60,
-user_id: currentUser || "default"
-})
+body: JSON.stringify({message: message, agent: currentAgent, timeout: 60, user_id: currentUser || "default"})
 });
 loadingDiv.remove();
 if (!res.ok) {
@@ -493,11 +509,11 @@ addMessage(msg, "assistant");
 speak(msg);
 } else {
 const data = await res.json();
-let agentLabel = '';
-if (data.agent && currentAgent === 'auto') {
-  const icons = {llm: 'LLM', researcher: 'RESEARCHER', coder: 'CODER', system: 'SYSTEM', summarizer: 'SUMMARIZER', reviewer: 'REVIEWER', planner: 'PLANNER'};
-  const agentName = icons[data.agent] || data.agent.toUpperCase();
-  agentLabel = '>> ' + agentName + ' tarafindan';
+let agentLabel = "";
+if (data.agent && currentAgent === "auto") {
+const icons = {llm: "LLM", researcher: "RESEARCHER", coder: "CODER", system: "SYSTEM", summarizer: "SUMMARIZER", reviewer: "REVIEWER", planner: "PLANNER"};
+const agentName = icons[data.agent] || data.agent.toUpperCase();
+agentLabel = ">> " + agentName + " tarafindan";
 }
 addMessage(data.answer, "assistant", data.sources, agentLabel);
 speak(data.answer);
@@ -507,13 +523,68 @@ loadingDiv.remove();
 const msg = "Baglanti hatasi: " + e.message;
 addMessage(msg, "assistant");
 speak(msg);
-} finally {
-isProcessing = false;
-sendBtn.disabled = false;
-messageInput.focus();
 }
 }
 
+async function sendMessageStreaming(message) {
+const div = document.createElement("div");
+div.className = "message assistant";
+const labelSpan = document.createElement("div");
+labelSpan.style.fontSize = "11px";
+labelSpan.style.opacity = "0.7";
+labelSpan.style.marginBottom = "6px";
+labelSpan.style.fontWeight = "600";
+labelSpan.textContent = ">> CANLI STREAMING";
+div.appendChild(labelSpan);
+const contentDiv = document.createElement("div");
+contentDiv.textContent = "";
+div.appendChild(contentDiv);
+chat.appendChild(div);
+chat.scrollTop = chat.scrollHeight;
+try {
+const res = await fetch(`${API_BASE}/api/stream`, {
+method: "POST",
+headers: authHeaders(),
+body: JSON.stringify({message: message, user_id: currentUser || "default"})
+});
+if (!res.ok) {
+div.remove();
+const err = await res.json();
+addMessage("Hata: " + (err.detail || "Bilinmeyen"), "assistant");
+return;
+}
+const reader = res.body.getReader();
+const decoder = new TextDecoder();
+let buffer = "";
+let fullText = "";
+while (true) {
+const { done, value } = await reader.read();
+if (done) break;
+buffer += decoder.decode(value, { stream: true });
+const lines = buffer.split("\n");
+buffer = lines.pop();
+for (const line of lines) {
+if (line.startsWith("data: ")) {
+try {
+const data = JSON.parse(line.slice(6));
+if (data.type === "chunk") {
+fullText += data.content;
+contentDiv.innerHTML = formatMarkdown(fullText);
+chat.scrollTop = chat.scrollHeight;
+} else if (data.type === "done") {
+labelSpan.textContent = ">> CANLI STREAMING (" + data.duration_ms + " ms)";
+speak(fullText);
+}
+} catch (e) { console.error("SSE parse:", e); }
+}
+}
+}
+} catch (e) {
+div.remove();
+const msg = "Streaming hatasi: " + e.message;
+addMessage(msg, "assistant");
+}
+}
 sendBtn.onclick = sendMessage;
 messageInput.addEventListener("keypress", (e) => { if (e.key === "Enter") sendMessage(); });
 
