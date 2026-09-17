@@ -1,4 +1,4 @@
-"""Groq LLM istemcisi - streaming destekli."""
+"""Groq LLM istemcisi."""
 from __future__ import annotations
 
 import os
@@ -15,7 +15,6 @@ AVAILABLE_MODELS = [
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
     "qwen/qwen3.6-27b",
-    "llama-3.1-8b-instant",
 ]
 
 
@@ -30,7 +29,7 @@ class GroqLLMClient:
         self.model = model or DEFAULT_MODEL
 
     def chat(self, prompt: str, system: str | None = None) -> str:
-        """Tek seferlik sohbet (normal)."""
+        """Tek seferlik sohbet."""
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -45,7 +44,7 @@ class GroqLLMClient:
         return response.choices[0].message.content or ""
 
     def chat_stream(self, prompt: str, system: str | None = None) -> Iterator[str]:
-        """Streaming sohbet - token token dondurur."""
+        """Streaming sohbet."""
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
