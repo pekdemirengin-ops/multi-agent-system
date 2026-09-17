@@ -66,7 +66,11 @@ def _source_trust(url: str) -> int:
 # ============================================================
 # Sistem promptu - chain of thought
 # ============================================================
-SUMMARY_PROMPT = """Sen uzman bir arastirma asistanisin. Amacin: EKSIKSIZ, DOGRU, KISA cevap.
+SUMMARY_PROMPT = """MUTLAK KURAL: SADECE kaynaklarda gecen bilgiyi yaz.
+Kaynaklarda OLMAYAN hicbir ismi, tarihi, sayiyi YAZMA.
+Kendi hafIzandan bilgi EKLEME. Uydurma YAPMA.
+
+Sen uzman bir arastirma asistanisin. Amacin: EKSIKSIZ, DOGRU, KISA cevap.
 
 ADIM ADIM DUSUN (kafandan, cevaba yazma):
 
@@ -134,6 +138,16 @@ ONEMLI KAYNAK SECIMI:
 - "Postecoglou", "Ange" gibi ISIM iceren kaynaklar cok degerli.
 - Isim iceren kaynak yoksa, genel bilgi ver.
 - "Facebook" gibi dusuk guven kaynaklarda bile ISIM varsa, KULLAN.
+
+ORNEK - YEREL GUNCEL BILGI:
+Soru: Kozan belediye baskani kim?
+Kaynaklar:
+  [1] Kozan Belediyesi Baskanimiz Mustafa Atli (Agustos 2026)
+  [2] Belediye Baskani Mustafa Atli aciklama yapti (Subat 2026)
+  [3] Kozan Belediyesi Meclis Toplantisi, Baskan Mustafa Atli (Haziran 2024)
+Cevap: Kozan Belediye Baskani Mustafa Atli'dir.
+KURAL: Kaynaklarda "Mustafa Atli" geciyor, "Kazim Ozgan" GECMIYOR.
+       O yuzden cevap "Mustafa Atli"dir.
 
 Simdi cevapla:
 """
