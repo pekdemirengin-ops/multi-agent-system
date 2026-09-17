@@ -1,4 +1,4 @@
-"""Arastirma agent'i - coklu arama + baglam + LLM ozetleme."""
+"""Arastirma agent'i - coklu sorgu + karsilastirma + guvenilir kaynak + chain of thought."""
 from __future__ import annotations
 
 import re
@@ -15,52 +15,117 @@ logger = structlog.get_logger(__name__)
 
 
 # ============================================================
-# Sistem promptu - "uzman arastirmaci" gibi dusun
+# Guvenilir kaynak domainleri (yuksek -> dusuk)
 # ============================================================
-SUMMARY_PROMPT = """Sen bir arastirma asistanisin. Web kaynaklarindan KISA cevap cikar.
+SOURCE_TRUST = {
+    # Cok yuksek
+    "wikipedia.org": 100,
+    "britannica.com": 100,
+    # Yuksek - resmi
+    "gov.tr": 95,
+    "gov.uk": 95,
+    "gov": 90,
+    "resmigazete.gov.tr": 95,
+    "beinsports.com.tr": 85,
+    "transfermarkt.com": 90,
+    "transfermarkt.com.tr": 90,
+    "fifa.com": 90,
+    "uefa.com": 90,
+    "tff.org": 90,
+    # Orta - haber
+    "hurriyet.com.tr": 75,
+    "ntv.com.tr": 75,
+    "sondakika.com": 70,
+    "haberturk.com": 75,
+    "milliyet.com.tr": 70,
+    "cnnturk.com": 75,
+    "bbc.com": 80,
+    "reuters.com": 85,
+    "apnews.com": 85,
+    # Dusuk
+    "facebook.com": 30,
+    "twitter.com": 30,
+    "x.com": 30,
+    "instagram.com": 30,
+    "youtube.com": 40,
+    "blogspot.com": 20,
+    "medium.com": 40,
+}
 
-KRITIK KURAL (EN ONEMLI):
-Kaynakta birden fazla isim varsa, SORUYA UYGUN olani sec.
 
-ORNEK 1 (kulup sorusu):
-Soru: Cristiano Ronaldo'nun teknik direktoru kim?
+def _source_trust(url: str) -> int:
+    """URL'den guven puanı cikarir (0-100)."""
+    url_lower = url.lower()
+    best = 50  # default
+    for domain, score in SOURCE_TRUST.items():
+        if domain in url_lower:
+            best = max(best, score)
+    return best
+
+
+# ============================================================
+# Sistem promptu - chain of thought
+# ============================================================
+SUMMARY_PROMPT = """Sen uzman bir arastirma asistanisin. Amacin: EKSIKSIZ, DOGRU, KISA cevap.
+
+ADIM ADIM DUSUN (kafandan, cevaba yazma):
+
+ADIM 1: Soruyu parcala
+- "Ronaldo kim, hangi takim, hoca kim" = 3 bilgi
+- Her bilgi icin ayri dusun
+
+ADIM 2: Her parca icin kaynaklari incele
+- Kaynaklari TEK TEK oku
+- Her kaynakta gecen ISIMLERI ve BAGLAMLARINI not et
+  Ornek: "Al-Nassr hocasi Ange" -> KULUP hocasi
+  Ornek: "Portekiz milli takimi hocasi Jorge" -> MILLI TAKIM hocasi
+
+ADIM 3: Karsilastir
+- Ayni bilgi birden fazla kaynakta mi?
+- Farkli bilgi varsa, GUVENILIR kaynagi sec (Wikipedia, resmi, buyuk haber)
+- CELISKI VARSA: "Kaynaklarda celiski var, en guvenilir kaynak X diyor" de
+
+ADIM 4: Cevap yaz
+- Sorudaki HER parca icin AYRI cumle
+- MAKSIMUM 4 cumle
+- Kaynak isimlerini kullanma (Kaynak 1, Kaynak 2) - sadece bilgiyi yaz
+
+MUTLAK KURALLAR:
+1. Sorudaki HER parca icin cevap ver.
+2. MAKSIMUM 4 cumle. Uzatma.
+3. SADECE kaynaktaki bilgi. Uydurma YAPMA.
+4. Isim UYDURMA.
+5. BAGLAM KONTROLU:
+   - Kaynakta "Al-Nassr" + isim -> KULUP hocasi
+   - Kaynakta "Portekiz milli takim" + isim -> MILLI TAKIM hocasi
+   - "Kulup mu milli takim mi" ayirt et
+6. Bilgi GERCEKTEN yoksa: "X bilgisi kaynaklarda yer almamaktadir".
+
+ORNEK 1 (kulup sorusu - KRITIK):
+Soru: Ronaldo nun teknik direktoru kim?
 Kaynaklar:
-  - "Al-Nassr hocasi Ange Postecoglou" 
-  - "Portekiz milli takimi hocasi Jorge Jesus"
-Cevap: Cristiano Ronaldo'nun kulubu Al-Nassr'in teknik direktoru Ange Postecoglou'dur.
-       ^^^ "Al-Nassr" yanindaki isim -> DOGRU
-       ^^^ "Portekiz" yanindaki isim -> YANLIS, yazma
+  [1] "Al-Nassr hocasi Ange Postecoglou" (guven: 90)
+  [2] "Portekiz milli takimi hocasi Jorge Jesus" (guven: 75)
+Cevap: Cristiano Ronaldo nun kulubu Al-Nassr in teknik direktoru Ange Postecoglou dur.
 
 ORNEK 2 (milli takim sorusu):
-Soru: Cristiano Ronaldo'nun milli takim teknik direktoru kim?
+Soru: Ronaldo nun milli takim teknik direktoru kim?
 Kaynaklar:
-  - "Al-Nassr hocasi Ange Postecoglou"
-  - "Portekiz milli takimi hocasi Jorge Jesus"
-Cevap: Cristiano Ronaldo'nun milli takim teknik direktoru Jorge Jesus'tur.
-       ^^^ "Portekiz milli takim" yanindaki isim -> DOGRU
+  [1] "Al-Nassr hocasi Ange Postecoglou"
+  [2] "Portekiz milli takimi hocasi Jorge Jesus"
+Cevap: Cristiano Ronaldo nun milli takim teknik direktoru Jorge Jesus tur.
 
 ORNEK 3 (coklu bilgi):
 Soru: Ronaldo kim, hangi takim, hoca kim?
-Kaynaklar: [Ronaldo 1985. Al-Nassr'da oynuyor. Al-Nassr hocasi Ange Postecoglou.]
-Cevap: Cristiano Ronaldo, 1985 dogumlu Portekizli futbolcudur. Al-Nassr'da oynamaktadir. Al-Nassr'in teknik direktoru Ange Postecoglou'dur.
-
-KURALLAR:
-1. Sorudaki HER parca icin cevap ver.
-2. MAKSIMUM 4 cumle.
-3. SADECE kaynaktaki bilgi.
-4. Uydurma YAPMA. Isim UYDURMA.
-5. Kaynakta "Portekiz" yaziyorsa -> MILLI TAKIM hocasi, KULUP DEGIL.
-6. Kaynakta "Al-Nassr" yaziyorsa -> KULUP hocasi, MILLI TAKIM DEGIL.
-7. Bilgi kaynakta GERCEKTEN yoksa: "X bilgisi kaynaklarda yer almamaktadir".
+Kaynaklar: [Ronaldo 1985. Al-Nassr da oynuyor. Al-Nassr hocasi Ange Postecoglou.]
+Cevap: Cristiano Ronaldo, 1985 dogumlu Portekizli futbolcudur. Al-Nassr da oynamaktadir. Al-Nassr in teknik direktoru Ange Postecoglou dur.
 
 Simdi cevapla:
 """
 
 
-
-
 class ResearcherAgent(BaseAgent):
-    """Web'de arastirir, coklu arama yapar, LLM ile ozetler."""
+    """Coklu sorgu + karsilastirma + guvenilir kaynak + chain of thought."""
 
     def __init__(
         self,
@@ -74,9 +139,9 @@ class ResearcherAgent(BaseAgent):
         self.use_llm_summary = use_llm_summary
         self.llm = GroqLLMClient(model="openai/gpt-oss-120b") if use_llm_summary else None
 
+    # ---------- SORGU PARCALAMA ----------
     def _split_query(self, query: str) -> list[str]:
         """Soruyu alt sorulara boler VE her parcaya baglam ekler."""
-        # Once virgul veya "ve" ile bol
         parts = []
         if "," in query:
             parts = [p.strip() for p in query.split(",") if p.strip()]
@@ -88,27 +153,22 @@ class ResearcherAgent(BaseAgent):
         if len(parts) < 2:
             return [query]
 
-        # Ana konuyu cikar: ilk parca genelde "X kimdir" -> "X"
         first = parts[0]
-        # "kimdir", "nedir", "nerede" gibi kelimeleri cikar
         subject = first
         for kw in ["kimdir", "kim", "nedir", "ne demek", "nerede", "ne zaman"]:
             subject = re.sub(rf"\b{kw}\b", "", subject, flags=re.IGNORECASE)
         subject = subject.strip(" ?.,!")
 
-        # Baglam ekle: ilk parca subject + sonraki parcalar
-        enriched_parts = [first]
+        enriched = [first]
         for part in parts[1:]:
-            # Eger parca cok kisa veya baglamsiz ise subject ekle
             if len(part.split()) < 4 and subject:
-                enriched_parts.append(f"{subject} {part}")
+                enriched.append(f"{subject} {part}")
             else:
-                enriched_parts.append(part)
+                enriched.append(part)
+        return enriched
 
-        return enriched_parts
-
+    # ---------- SORGU ZENGINLESTIRME ----------
     def _enrich_query(self, query: str) -> str:
-        """Yil ekler (guncel bilgi icin)."""
         current_year = datetime.now().year
         if any(str(y) in query for y in range(current_year - 2, current_year + 2)):
             return query
@@ -117,78 +177,38 @@ class ResearcherAgent(BaseAgent):
             return f"{query} {current_year}"
         return query
 
-    def _generate_followup_queries(self, query: str) -> list[str]:
-        """Ilk aramada bulunamayan bilgiler icin alternatif sorgular uretir."""
-        followups = []
-        lower = query.lower()
+    # ---------- COKLU SORGU URETME ----------
+    def _generate_multi_queries(self, sub_query: str) -> list[str]:
+        """Bir alt soru icin 2-3 farkli sorgu uretir."""
+        queries = [sub_query]
+        lower = sub_query.lower()
 
-        # Soru tipi: teknik direktor/hoca/coach
+        # "kim" sorusu icin alternatif kaliplar
         if "teknik direkt" in lower or "hoca" in lower or "coach" in lower:
-            # Kisi ismi cikar (Ronaldo, Messi, vs)
-            # Buyuk harfle baslayan kelimeler
-            words = query.split()
-            subject_words = []
-            for w in words:
-                # Turkce karakter temizle
-                clean = w.strip("?.,!").replace("'", "")
-                if clean and clean[0].isupper() and len(clean) > 2:
-                    if clean.lower() not in ["kim", "hoca", "teknik", "direktor", "direktoru", "nerede"]:
-                        subject_words.append(clean)
-
+            # Subject cikar
+            words = sub_query.split()
+            subject_words = [w.strip("?.,!") for w in words if w.strip("?.,!")[0].isupper()]
             subject = " ".join(subject_words[:2]) if subject_words else ""
 
-            # Kulupleri kontrol et
-            clubs = ["al-nassr", "al nassr", "galatasaray", "fenerbahce", "besiktas", "real madrid", "barcelona", "manchester"]
-            found_club = None
-            for c in clubs:
-                if c in lower:
-                    found_club = c
-                    break
+            if subject:
+                queries.append(f"{subject} new manager 2026")
+                queries.append(f"{subject} teknik direktoru ismi")
 
-            if found_club:
-                # Kulup dogrudan yazilmis
-                club_name = found_club.replace("al-nassr", "Al-Nassr").replace("al nassr", "Al-Nassr").title()
-                followups.append(f"{found_club} new manager 2026")
-                followups.append(f"{found_club} head coach 2026 who")
-                followups.append(f"{found_club} teknik direktoru ismi")
-                followups.append(f"{found_club} who is coach")
-            elif subject:
-                # Kisi isminden yola cik (Ronaldo -> Al-Nassr)
-                followups.append(f"{subject} new manager 2026")
-                followups.append(f"{subject} coach who 2026")
-                followups.append(f"{subject} teknik direktoru ismi")
-                followups.append(f"who is {subject} manager 2026")
-            else:
-                followups.append(f"{query} 2026 guncel")
+        elif "kim" in lower:
+            subject = re.sub(r"\b(kim|kimdir|nerede)\b", "", sub_query, flags=re.IGNORECASE).strip(" ?.,!")
+            queries.append(f"{subject} ismi nedir")
+            queries.append(f"{subject} 2026")
 
-        # "kim" + genel
-        elif "kim" in lower or "kimdir" in lower:
-            subject = re.sub(r"\b(kim|kimdir|nerede|ne zaman|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
-            followups.append(f"{subject} ismi nedir")
-            followups.append(f"{subject} 2026 guncel")
+        return queries[:3]
 
-        # Yerel yonetim
-        elif "belediye" in lower or "vali" in lower:
-            subject = re.sub(r"\b(kim|kimdir|nerede|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
-            followups.append(f"{subject} resmi aciklama 2026")
-            followups.append(f"{subject} 2026 son dakika")
-
-        return followups[:4]
-
-
+    # ---------- YETERSIZ MI? ----------
     def _is_insufficient(self, answer: str) -> bool:
-        """Cevap yetersiz mi? ('kaynakta yok' diyorsa True)."""
-        # Turkce karakterleri ASCII'ye cevir
-        tr_map = str.maketrans({
-            "c": "c", "g": "g", "i": "i", "o": "o", "s": "s", "u": "u",
-        })
-        # Manuel replace (Türkçe karakterler)
         answer_ascii = answer.lower()
         answer_ascii = answer_ascii.replace("ç", "c").replace("ğ", "g")
         answer_ascii = answer_ascii.replace("ı", "i").replace("ö", "o")
         answer_ascii = answer_ascii.replace("ş", "s").replace("ü", "u")
 
-        insufficient_phrases = [
+        phrases = [
             "kaynaklarda yer almamaktadir",
             "kaynaklarda yer almiyor",
             "bilgi bulunamadi",
@@ -199,60 +219,111 @@ class ResearcherAgent(BaseAgent):
             "bulunmuyor",
             "bilgisi kaynaklarda",
             "isim kaynaklarda",
-            "kaynakta yok",
-            "bilgi yok",
-            "bilinmiyor",
-            "bilgi yer almamaktadir",
-            "yer almamistir",
         ]
-        return any(phrase in answer_ascii for phrase in insufficient_phrases)
+        return any(p in answer_ascii for p in phrases)
 
+    # ---------- FOLLOW-UP SORGULAR ----------
+    def _generate_followup_queries(self, query: str) -> list[str]:
+        followups = []
+        lower = query.lower()
 
+        if "teknik direkt" in lower or "hoca" in lower or "coach" in lower:
+            words = query.split()
+            subject_words = []
+            for w in words:
+                clean = w.strip("?.,!").replace("'", "")
+                if clean and clean[0].isupper() and len(clean) > 2:
+                    if clean.lower() not in ["kim", "hoca", "teknik", "direktor", "direktoru", "nerede"]:
+                        subject_words.append(clean)
+            subject = " ".join(subject_words[:2]) if subject_words else ""
+
+            if subject:
+                followups.append(f"{subject} new manager 2026")
+                followups.append(f"{subject} coach who 2026")
+                followups.append(f"{subject} teknik direktoru ismi")
+                followups.append(f"who is {subject} manager 2026")
+
+        elif "kim" in lower or "kimdir" in lower:
+            subject = re.sub(r"\b(kim|kimdir|nerede|ne zaman|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
+            followups.append(f"{subject} ismi nedir")
+            followups.append(f"{subject} 2026 guncel")
+
+        elif "belediye" in lower or "vali" in lower:
+            subject = re.sub(r"\b(kim|kimdir|nerede|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
+            followups.append(f"{subject} resmi aciklama 2026")
+            followups.append(f"{subject} 2026 son dakika")
+
+        return followups[:4]
+
+    # ---------- KAYNAK TOPLAMA (COKLU SORGU + GUVEN PUANI) ----------
+    def _collect_sources(self, query: str) -> tuple[list[dict], int]:
+        """Coklu sorgu ile kaynak toplar, guven puanina gore siralar."""
+        sub_queries = self._split_query(query)
+        all_sources = []
+
+        if len(sub_queries) > 1:
+            logger.info("researcher.multi_search", count=len(sub_queries), queries=sub_queries)
+            for sq in sub_queries:
+                # Her alt soru icin 2-3 farkli sorgu
+                multi = self._generate_multi_queries(sq)
+                for mq in multi:
+                    enriched = self._enrich_query(mq)
+                    found = search(enriched, max_results=3)
+                    all_sources.extend(found)
+        else:
+            multi = self._generate_multi_queries(query)
+            for mq in multi:
+                enriched = self._enrich_query(mq)
+                found = search(enriched, max_results=self.max_search_results)
+                all_sources.extend(found)
+
+        # Tekrarlari temizle + guven puani ekle
+        seen_urls = set()
+        unique_sources = []
+        for s in all_sources:
+            if s["url"] not in seen_urls:
+                seen_urls.add(s["url"])
+                s["trust"] = _source_trust(s["url"])
+                unique_sources.append(s)
+
+        # Guven puanina gore sirala
+        unique_sources.sort(key=lambda x: x.get("trust", 50), reverse=True)
+
+        return unique_sources[:8], len(sub_queries)
+
+    # ---------- OZETLEME ----------
     def _summarize_with_llm(self, query: str, sources: list) -> str:
-        """Kaynaklari LLM ile ozetler. Kaynaklari alakaya gore siralar."""
         if not self.llm or not sources:
             return ""
 
-        # Soru kelimeleri (alaka puanlamasi icin)
         query_words = set(re.findall(r"\w+", query.lower()))
-
-        # Alakasiz kelimeler
         stop = {"kim", "kimdir", "nerede", "ne", "zaman", "hangi", "kac",
                 "ve", "mi", "mu", "midir", "mudur", "the", "bir"}
 
         def relevance(s):
-            """Kaynak alakasini puanla (0-100)."""
             text = (s['title'] + " " + s['snippet']).lower()
-            score = 0
+            score = s.get("trust", 50)
             for w in query_words:
                 if w in stop or len(w) < 3:
                     continue
                 if w in text:
                     score += 10
-            # Baslik eslesmesi ekstra puan
-            for w in query_words:
-                if w in stop or len(w) < 3:
-                    continue
                 if w in s['title'].lower():
                     score += 15
             return score
 
-        # Kaynaklari alakaya gore sirala
-        ranked = sorted(sources, key=relevance, reverse=True)
-
-        # Ilk 5 kaynagi al (daha fazla olursa LLM kaybolur)
-        top = ranked[:6]
+        ranked = sorted(sources, key=relevance, reverse=True)[:6]
 
         context_lines = []
-        for i, s in enumerate(top, 1):
-            context_lines.append(f"[KAYNAK {i}]")
+        for i, s in enumerate(ranked, 1):
+            context_lines.append(f"[KAYNAK {i}] (guven: {s.get('trust', 50)})")
             context_lines.append(f"Baslik: {s['title']}")
             context_lines.append(f"Icerik: {s['snippet'][:1500]}")
             context_lines.append(f"URL: {s['url'][:100]}")
             context_lines.append("")
 
         context = "\n".join(context_lines)
-        prompt = f"Soru: {query}\n\n{context}\n\nCevap (max 4 cumle):"
+        prompt = f"Soru: {query}\n\n{context}\n\nCevap:"
         try:
             answer = self.llm.chat(prompt=prompt, system=SUMMARY_PROMPT)
             return answer.strip()
@@ -260,33 +331,7 @@ class ResearcherAgent(BaseAgent):
             logger.exception("researcher.summary_failed", error=str(e))
             return ""
 
-    def _collect_sources(self, query: str) -> tuple[list[dict], int]:
-        """Tek veya coklu arama yapar, kaynaklari doner."""
-        sub_queries = self._split_query(query)
-        all_sources = []
-
-        if len(sub_queries) > 1:
-            logger.info("researcher.multi_search", count=len(sub_queries), queries=sub_queries)
-            # Her alt soru icin ayri arama
-            for sq in sub_queries:
-                enriched = self._enrich_query(sq)
-                found = search(enriched, max_results=3)
-                all_sources.extend(found)
-        else:
-            enriched = self._enrich_query(query)
-            all_sources = search(enriched, max_results=self.max_search_results)
-
-        # Tekrarlari temizle (URL bazli)
-        seen_urls = set()
-        unique_sources = []
-        for s in all_sources:
-            if s["url"] not in seen_urls:
-                seen_urls.add(s["url"])
-                unique_sources.append(s)
-
-        # Max 8 kaynak
-        return unique_sources[:8], len(sub_queries)
-
+    # ---------- ANA HANDLE ----------
     async def handle(self, message: Message) -> None:
         if message.msg_type != "task":
             return
@@ -312,7 +357,7 @@ class ResearcherAgent(BaseAgent):
                         lines.append("")
                     answer = "\n".join(lines)
 
-                # FOLLOW-UP: Cevap yetersizse farkli sorguyla tekrar ara
+                # FOLLOW-UP
                 if self._is_insufficient(answer):
                     logger.info("researcher.followup_needed", query=query[:60])
                     followups = self._generate_followup_queries(query)
@@ -321,15 +366,15 @@ class ResearcherAgent(BaseAgent):
                     extra_sources = []
                     for fq in followups:
                         found = search(fq, max_results=3)
+                        for s in found:
+                            s["trust"] = _source_trust(s["url"])
                         extra_sources.extend(found)
 
-                    # Tekrarlari temizle
                     seen_urls = {s["url"] for s in sources}
                     new_sources = [s for s in extra_sources if s["url"] not in seen_urls]
 
                     if new_sources:
                         logger.info("researcher.followup_found", new_count=len(new_sources))
-                        # Yeni kaynaklarla tekrar ozetle
                         all_sources = sources + new_sources
                         summary2 = self._summarize_with_llm(query, all_sources)
                         if summary2:
@@ -357,4 +402,4 @@ class ResearcherAgent(BaseAgent):
             await self.send(message.sender, {"error": str(e)}, msg_type="error")
 
     def __repr__(self) -> str:
-        return f"<ResearcherAgent name={self.name!r} (multi-search, llm-summary)>"
+        return f"<ResearcherAgent name={self.name!r} (multi-query, trust-ranked, chain-of-thought)>"
