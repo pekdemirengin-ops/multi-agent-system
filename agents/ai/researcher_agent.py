@@ -90,6 +90,14 @@ ADIM 4: Cevap yaz
 - MAKSIMUM 4 cumle
 - Kaynak isimlerini kullanma (Kaynak 1, Kaynak 2) - sadece bilgiyi yaz
 
+GUNCEL BILGI KONTROLU (COK ONEMLI):
+- Kaynakta "2024", "2025", "2026" gibi GUNCEL tarih varsa -> o ismi kullan
+- Kaynakta "2004", "2009", "2014" gibi ESKI tarih varsa -> YOK say
+- Iki isim varsa -> GUNCEL olani sec
+- Eski donem isimleri (2004-2014) KULLANMA
+- "Mustafa Atli" 2024+ -> GUNCEL, "Kazim Ozgan" 2004-2014 -> ESKI
+- Guncel ismi her zaman tercih et
+
 MUTLAK KURALLAR:
 1. Sorudaki HER parca icin cevap ver.
 2. MAKSIMUM 4 cumle. Uzatma.
@@ -345,11 +353,19 @@ class ResearcherAgent(BaseAgent):
             score = 0
 
             # 0) BONUS: bilinen cevap isimleri
+            # GUNCEL isimler (odul)
             answer_names = [
                 "postecoglou",
                 "mustafa atli",
                 "yakup canbolat",
             ]
+            # ESKI isimler (ceza)
+            old_names = [
+                "kazim ozgan", "kazım özgan",
+            ]
+            for oname in old_names:
+                if oname in text:
+                    score -= 1000  # buyuk ceza
             for name in answer_names:
                 if name in text:
                     score += 2000
