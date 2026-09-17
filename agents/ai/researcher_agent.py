@@ -135,6 +135,52 @@ class ResearcherAgent(BaseAgent):
             return f"{query} {current_year}"
         return query
 
+    def _generate_followup_queries(self, query: str) -> list[str]:
+        """Ilk aramada bulunamayan bilgiler icin alternatif sorgular uretir."""
+        followups = []
+
+        lower = query.lower()
+
+        # "kim" + kisi/yer -> alternatif
+        if "kim" in lower or "kimdir" in lower:
+            # Ana konuyu cikar
+            subject = re.sub(r"\b(kim|kimdir|nerede|ne zaman|hangi)\b", "", query, flags=re.IGNORECASE)
+            subject = subject.strip(" ?.,!")
+
+            # Farkli arama kaliplari
+            followups.append(f"{subject} ismi nedir")
+            followups.append(f"{subject} 2026 guncel")
+            followups.append(f"{subject} haber")
+
+        # Yerel yonetim
+        if "belediye" in lower or "vali" in lower:
+            subject = re.sub(r"\b(kim|kimdir|nerede|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
+            followups.append(f"{subject} resmi aciklama 2026")
+
+        # Spor
+        if any(w in lower for w in ["teknik direkt", "hoca", "transfer", "baskan"]):
+            subject = re.sub(r"\b(kim|kimdir|nerede|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
+            followups.append(f"{subject} son dakika 2026")
+
+        return followups[:3]
+
+    def _is_insufficient(self, answer: str) -> bool:
+        """Cevap yetersiz mi? ('kaynakta yok' diyorsa True)."""
+        lower = answer.lower()
+        insufficient_phrases = [
+            "kaynaklarda yer almamaktadir",
+            "kaynaklarda yer almıyor",
+            "bilgi bulunamadi",
+            "bilgi bulunamadı",
+            "kaynaklarda belirtilmemistir",
+            "kaynaklarda belirtilmemiştir",
+            "yer almamaktadir",
+            "yer almıyor",
+            "bulunmamaktadir",
+            "bulunmuyor",
+        ]
+        return any(phrase in lower for phrase in insufficient_phrases)
+
     def _summarize_with_llm(self, query: str, sources: list) -> str:
         """Kaynaklari LLM ile ozetler. Kaynaklari alakaya gore siralar."""
         if not self.llm or not sources:
@@ -231,7 +277,6 @@ class ResearcherAgent(BaseAgent):
                 if summary:
                     answer = summary
                 else:
-                    # LLM yoksa ham sonuc
                     today = datetime.now().strftime("%Y-%m-%d")
                     lines = [f"{today} itibariyle web arama sonuclari:", f"Sorgu: {query}", ""]
                     for i, s in enumerate(sources, 1):
@@ -239,6 +284,31 @@ class ResearcherAgent(BaseAgent):
                         lines.append(f"   {s['snippet']}")
                         lines.append("")
                     answer = "\n".join(lines)
+
+                # FOLLOW-UP: Cevap yetersizse farkli sorguyla tekrar ara
+                if self._is_insufficient(answer):
+                    logger.info("researcher.followup_needed", query=query[:60])
+                    followups = self._generate_followup_queries(query)
+                    logger.info("researcher.followup_queries", queries=followups)
+
+                    extra_sources = []
+                    for fq in followups:
+                        found = search(fq, max_results=3)
+                        extra_sources.extend(found)
+
+                    # Tekrarlari temizle
+                    seen_urls = {s["url"] for s in sources}
+                    new_sources = [s for s in extra_sources if s["url"] not in seen_urls]
+
+                    if new_sources:
+                        logger.info("researcher.followup_found", new_count=len(new_sources))
+                        # Yeni kaynaklarla tekrar ozetle
+                        all_sources = sources + new_sources
+                        summary2 = self._summarize_with_llm(query, all_sources)
+                        if summary2:
+                            answer = summary2
+                            sources = all_sources
+                            logger.info("researcher.followup_success")
 
             await self.send(
                 message.sender,
