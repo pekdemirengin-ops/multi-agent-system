@@ -147,31 +147,61 @@ class ResearcherAgent(BaseAgent):
     def _generate_followup_queries(self, query: str) -> list[str]:
         """Ilk aramada bulunamayan bilgiler icin alternatif sorgular uretir."""
         followups = []
-
         lower = query.lower()
 
-        # "kim" + kisi/yer -> alternatif
-        if "kim" in lower or "kimdir" in lower:
-            # Ana konuyu cikar
-            subject = re.sub(r"\b(kim|kimdir|nerede|ne zaman|hangi)\b", "", query, flags=re.IGNORECASE)
-            subject = subject.strip(" ?.,!")
+        # Soru tipi: teknik direktor/hoca/coach
+        if "teknik direkt" in lower or "hoca" in lower or "coach" in lower:
+            # Kisi ismi cikar (Ronaldo, Messi, vs)
+            # Buyuk harfle baslayan kelimeler
+            words = query.split()
+            subject_words = []
+            for w in words:
+                # Turkce karakter temizle
+                clean = w.strip("?.,!").replace("'", "")
+                if clean and clean[0].isupper() and len(clean) > 2:
+                    if clean.lower() not in ["kim", "hoca", "teknik", "direktor", "direktoru", "nerede"]:
+                        subject_words.append(clean)
 
-            # Farkli arama kaliplari
+            subject = " ".join(subject_words[:2]) if subject_words else ""
+
+            # Kulupleri kontrol et
+            clubs = ["al-nassr", "al nassr", "galatasaray", "fenerbahce", "besiktas", "real madrid", "barcelona", "manchester"]
+            found_club = None
+            for c in clubs:
+                if c in lower:
+                    found_club = c
+                    break
+
+            if found_club:
+                # Kulup dogrudan yazilmis
+                club_name = found_club.replace("al-nassr", "Al-Nassr").replace("al nassr", "Al-Nassr").title()
+                followups.append(f"{found_club} new manager 2026")
+                followups.append(f"{found_club} head coach 2026 who")
+                followups.append(f"{found_club} teknik direktoru ismi")
+                followups.append(f"{found_club} who is coach")
+            elif subject:
+                # Kisi isminden yola cik (Ronaldo -> Al-Nassr)
+                followups.append(f"{subject} new manager 2026")
+                followups.append(f"{subject} coach who 2026")
+                followups.append(f"{subject} teknik direktoru ismi")
+                followups.append(f"who is {subject} manager 2026")
+            else:
+                followups.append(f"{query} 2026 guncel")
+
+        # "kim" + genel
+        elif "kim" in lower or "kimdir" in lower:
+            subject = re.sub(r"\b(kim|kimdir|nerede|ne zaman|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
             followups.append(f"{subject} ismi nedir")
             followups.append(f"{subject} 2026 guncel")
-            followups.append(f"{subject} haber")
 
         # Yerel yonetim
-        if "belediye" in lower or "vali" in lower:
+        elif "belediye" in lower or "vali" in lower:
             subject = re.sub(r"\b(kim|kimdir|nerede|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
             followups.append(f"{subject} resmi aciklama 2026")
+            followups.append(f"{subject} 2026 son dakika")
 
-        # Spor
-        if any(w in lower for w in ["teknik direkt", "hoca", "transfer", "baskan"]):
-            subject = re.sub(r"\b(kim|kimdir|nerede|hangi)\b", "", query, flags=re.IGNORECASE).strip(" ?.,!")
-            followups.append(f"{subject} son dakika 2026")
+        return followups[:4]
 
-        return followups[:3]
 
     def _is_insufficient(self, answer: str) -> bool:
         """Cevap yetersiz mi? ('kaynakta yok' diyorsa True)."""
