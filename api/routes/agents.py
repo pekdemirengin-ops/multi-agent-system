@@ -19,6 +19,7 @@ from agents.ai import (
     SummarizerAgent,
 )
 from agents.devops import SystemAgent
+from agents.security import AlertAgent, LogWatcherAgent
 from api.routes.auth import get_optional_user
 from api.schemas import AgentInfo, AgentsResponse, AskRequest, AskResponse, Source
 from core.base_agent import BaseAgent, Message
@@ -78,6 +79,8 @@ async def init_agents() -> None:
             "reviewer": ReviewerAgent("reviewer", _bus),
             "summarizer": SummarizerAgent("summarizer", _bus),
             "router": RouterAgent("router", _bus),
+            "log_watcher": LogWatcherAgent("log_watcher", _bus),
+            "alert": AlertAgent("alert", _bus),
         }
     )
 
