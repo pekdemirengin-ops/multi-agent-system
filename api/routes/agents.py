@@ -20,6 +20,7 @@ from agents.ai import (
 )
 from agents.devops import SystemAgent
 from agents.security import AlertAgent, LogWatcherAgent
+from agents.workflow import ApprovalAgent, EmailAgent
 from api.routes.auth import get_optional_user
 from api.schemas import AgentInfo, AgentsResponse, AskRequest, AskResponse, Source
 from core.base_agent import BaseAgent, Message
@@ -81,6 +82,8 @@ async def init_agents() -> None:
             "router": RouterAgent("router", _bus),
             "log_watcher": LogWatcherAgent("log_watcher", _bus),
             "alert": AlertAgent("alert", _bus),
+            "email": EmailAgent("email", _bus),
+            "approval": ApprovalAgent("approval", _bus),
         }
     )
 
