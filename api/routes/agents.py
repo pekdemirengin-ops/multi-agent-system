@@ -188,9 +188,9 @@ async def ask(
 
     get_agent(chosen_agent)
 
-    # Researcher icin hafiza context'i KULLANMA (web arama bozuluyor)
-    # Diger agent'lar icin hafiza context'i kullan
-    if chosen_agent == "researcher":
+    # Bazi agent'lar icin hafiza context'i KULLANMA
+    NO_HISTORY_AGENTS = {"researcher", "log_watcher"}
+    if chosen_agent in NO_HISTORY_AGENTS:
         full_message = req.message
     elif history_text:
         full_message = f"{history_text}\n\n---\n\nKullanici simdi soruyor: {req.message}"

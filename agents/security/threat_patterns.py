@@ -8,26 +8,26 @@ THREAT_PATTERNS: list[tuple[str, str, str]] = [
     # Authentication
     ("failed_login", r"(failed\s*login|authentication\s*failed|invalid\s*password|login\s*denied)", "medium"),
     ("brute_force", r"(too\s*many\s*attempts|rate\s*limit.*exceeded|account\s*locked)", "high"),
-    ("unauthorized", r"(unauthorized|access\s*denied|permission\s*denied|401|403)", "medium"),
+    ("unauthorized", r"(unauthorized|access\s*denied|permission\s*denied)", "medium"),
 
-    # Injection
-    ("sql_injection", r"(union\s+select|drop\s+table|insert\s+into|delete\s+from|'.*or.*'=')", "critical"),
-    ("command_injection", r"(;\s*rm\s+-rf|&&\s*curl|\|\s*sh|`.*`)", "critical"),
-    ("xss_attempt", r"(<script|javascript:|onerror=|onload=)", "high"),
-    ("path_traversal", r"(\.\./\.\./|\.\.\\\.\.\\|%2e%2e)", "high"),
+    # Injection (kesin pattern'ler)
+    ("sql_injection", r"(union\s+select|drop\s+table|insert\s+into\s+\w+|delete\s+from\s+\w+|or\s+1\s*=\s*1|'\s*or\s*')", "critical"),
+    ("command_injection", r"(;\s*rm\s+-rf\s+/|\$\([^)]+\)|`\s*rm\s+)", "critical"),
+    ("xss_attempt", r"(<script\s*[^>]*>|javascript\s*:|onerror\s*=|onload\s*=)", "high"),
+    ("path_traversal", r"(\.\./\.\./|\.\.\\\\\.\.\\\\|%2e%2e%2f)", "high"),
 
     # Suspicious
-    ("suspicious_ip", r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", "low"),
-    ("sensitive_file", r"(/etc/passwd|/etc/shadow|\.env|id_rsa|\.ssh/)", "critical"),
-    ("admin_access", r"(/admin|/wp-admin|/phpmyadmin|/\.git/)", "medium"),
+    ("suspicious_ip", r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", "low"),
+    ("sensitive_file", r"(/etc/passwd|/etc/shadow|/etc/hosts|\.env\b|id_rsa|\.ssh/)", "critical"),
+    ("admin_access", r"(/admin\b|/wp-admin|/phpmyadmin|/\.git/)", "medium"),
 
     # Scanner/Bot
-    ("scanner", r"(nmap|nikto|sqlmap|masscan|zgrab)", "high"),
-    ("bot_agent", r"(bot|crawler|spider|scraper)", "low"),
+    ("scanner", r"\b(nmap|nikto|sqlmap|masscan|zgrab|dirbuster|gobuster)\b", "high"),
+    ("bot_agent", r"\b(bot|crawler|spider|scraper)\b", "low"),
 
     # Anomalies
     ("large_payload", r"(content-length:\s*\d{7,})", "medium"),
-    ("unusual_method", r"(TRACE|TRACK|DEBUG|PUT\s+/|DELETE\s+/admin)", "medium"),
+    ("unusual_method", r"\b(TRACE|TRACK|DEBUG)\s+/", "medium"),
 ]
 
 
