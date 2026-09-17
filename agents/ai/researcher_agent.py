@@ -22,34 +22,23 @@ MUTLAK KURALLAR:
 - SADECE kaynaklardaki bilgiyi kullan. Uydurma YAPMA.
 - URL, markdown, basli sayilar YAZMA.
 - Sayilari ve ozel isimleri oldugu gibi koru.
-
-BAGLAM KONTROLU (KRITIK):
-- Soru bir KULUPTEN bahsediyorsa (Al-Nassr, Galatasaray, Real Madrid), o kulubun bilgisini kullan. MILLI TAKIM bilgisini kullanma.
-- Soru bir MILLI TAKIMDAN bahsediyorsa (Portekiz, Turkiye), o milli takimin bilgisini kullan. Kulup bilgisini kullanma.
-- Ornek: "Ronaldo hangi takimda ve teknik direktoru kim?"
-  -> Ronaldo'nun KULUBU (Al-Nassr) ve o kulubun teknik direktoru lazim.
-  -> Portekiz milli takimi hocasi DEGIL.
-- Ornek: "Ronaldo'nun milli takim teknik direktoru kim?"
-  -> Portekiz milli takiminin hocasi lazim.
-
-COKLU BILGI:
-- Soruda "ve" varsa, her iki parcayi da cevapla.
-- "X kim ve Y nerede" -> iki ayri cumle.
+- Soruda birden fazla bilgi isteniyorsa (X ve Y, X nerede Y kim), HEPSINI cevapla.
+- Eger soruda "ve" varsa, her iki parcayi da cevapla.
 
 Ornek 1 (tek bilgi):
 Soru: Kozan belediye baskani kim?
 Kaynaklar: [Mustafa Atli, 2024 MHP]
-Cevap: Kozan Belediye Baskani Mustafa Atli'dir.
+Cevap: Kozan Belediye Baskani Mustafa Atli'dir. 2024 yerel secimlerinde MHP'den secilmistir.
 
-Ornek 2 (kulup baglami):
+Ornek 2 (coklu bilgi):
 Soru: Cristiano Ronaldo hangi takimda ve teknik direktoru kim?
-Kaynaklar: [Ronaldo Al-Nassr'da. Al-Nassr teknik direktorluk gorevine Ange Postecoglou getirildi. Portekiz milli takiminin hocasi Jorge Jesus.]
+Kaynaklar: [Ronaldo Al-Nassr'da. Ange Postecoglou Al-Nassr teknik direktorluk gorevine getirildi.]
 Cevap: Cristiano Ronaldo Al-Nassr'da oynamaktadir. Al-Nassr'in teknik direktoru Ange Postecoglou'dur.
 
-Ornek 3 (milli takim baglami):
-Soru: Cristiano Ronaldo'nun milli takim teknik direktoru kim?
-Kaynaklar: [Portekiz milli takimi. Jorge Jesus teknik direktor. Al-Nassr'da Ange Postecoglou.]
-Cevap: Cristiano Ronaldo'nun milli takim teknik direktoru Jorge Jesus'tur.
+Ornek 3 (kaynakta bilgi yoksa):
+Soru: X kisisi nerede yasiyor?
+Kaynaklar: [X kisisi hakkinda bilgi var ama yasadigi yer yok]
+Cevap: X kisisi hakkinda bilgi bulundu ancak yasadigi yer kaynaklarda yer almamaktadir.
 """
 
 
