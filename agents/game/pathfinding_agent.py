@@ -179,23 +179,23 @@ class PathfindingAgent(BaseAgent):
         start: tuple[int, int],
         goal: tuple[int, int],
     ) -> str:
-        """Grid'i gorsellestirir."""
+        """Grid'i gorsellestirir (sabit genislik)."""
         path_set = set(path)
         lines = []
         for x, row in enumerate(grid):
-            line = ""
+            cells = []
             for y, cell in enumerate(row):
                 if (x, y) == start:
-                    line += "S "
+                    cells.append("S")
                 elif (x, y) == goal:
-                    line += "G "
+                    cells.append("G")
                 elif cell == 1:
-                    line += "# "
+                    cells.append("#")
                 elif (x, y) in path_set:
-                    line += ". "
+                    cells.append(".")
                 else:
-                    line += "  "
-            lines.append(line.rstrip())
+                    cells.append(" ")
+            lines.append(" ".join(cells))
         return "\n".join(lines)
 
     @staticmethod
