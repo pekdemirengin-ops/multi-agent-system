@@ -66,6 +66,15 @@ Kaynaklar: [X hakkinda bilgi var, yasadigi yer yok]
 Cevap: X kisisi hakkinda bilgi bulundu ancak yasadigi yer kaynaklarda yer almamaktadir.
 
 
+KULUP vs MILLI TAKIM (SON KURAL):
+- Soru "X'in teknik direktoru" ise -> KULUP hocasi soruluyor
+- Soru "X milli takim teknik direktoru" ise -> MILLI TAKIM hocasi
+- Kaynakta iki isim varsa:
+  * "Al-Nassr" yanindaki isim -> KULUP hocasi -> DOGRU CEVAP
+  * "Portekiz" yanindaki isim -> MILLI TAKIM hocasi -> YANLIS
+- Ornek: "Ronaldo nun yeni teknik direktoru belli oldu" basliginda
+  KULUP hocasi yaziyor olabilir. Iceregini oku.
+
 SON KONTROL (CEVAP YAZMADAN ONCE):
 - Her "kim" sorusu icin TUM kaynaklari son kez kontrol et.
 - Kaynak BASLIGI ilgili ise (ornek: "yeni teknik direktoru belli oldu"),
@@ -229,7 +238,7 @@ class ResearcherAgent(BaseAgent):
         ranked = sorted(sources, key=relevance, reverse=True)
 
         # Ilk 5 kaynagi al (daha fazla olursa LLM kaybolur)
-        top = ranked[:5]
+        top = ranked[:6]
 
         context_lines = []
         for i, s in enumerate(top, 1):
