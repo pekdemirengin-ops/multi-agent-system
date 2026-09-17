@@ -72,6 +72,17 @@ class TokenResponse(BaseModel):
 class UserInfo(BaseModel):
     username: str
     is_admin: bool = False
+    role: str = "user"
+    created_at: str = ""
+
+
+class UserListResponse(BaseModel):
+    users: list[UserInfo]
+    total: int
+
+
+class RoleUpdateRequest(BaseModel):
+    role: str = Field(..., description="admin veya user")
 
 
 class AuthStatus(BaseModel):

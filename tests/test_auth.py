@@ -7,9 +7,9 @@ from core.auth import (
     decode_token,
     get_user_from_token,
     hash_password,
-    user_store,
     verify_password,
 )
+from core.user_store import get_user_store
 
 
 class TestPasswordHashing:
@@ -72,22 +72,94 @@ class TestJWT:
 
 
 class TestUserStore:
-    def test_default_admin_exists(self) -> None:
-        assert user_store.exists("admin") is True
+    """Async UserStore testleri (SQLite fallback)."""
 
-    def test_authenticate_admin(self) -> None:
-        assert user_store.authenticate("admin", "admin123") is True
+    @pytest.mark.asyncio
+    async def test_default_admin_exists(self) -> None:
+        store = await get_user_store()
+        assert await store.exists("admin") is True
 
-    def test_wrong_credentials_fail(self) -> None:
-        assert user_store.authenticate("admin", "wrong") is False
-        assert user_store.authenticate("nobody", "admin123") is False
+    @pytest.mark.asyncio
+    async def test_authenticate_admin(self) -> None:
+        store = await get_user_store()
+        assert await store.authenticate("admin", "admin123") is True
 
-    def test_create_user(self) -> None:
-        result = user_store.create_user("testuser_auth", "test123456")
+    @pytest.mark.asyncio
+    async def test_wrong_credentials_fail(self) -> None:
+        store = await get_user_store()
+        assert await store.authenticate("admin", "wrong") is False
+        assert await store.authenticate("nobody_xyz", "admin123") is False
+
+    @pytest.mark.asyncio
+    async def test_create_user(self) -> None:
+        store = await get_user_store()
+        # Unique isim (testler arasi cakismasin)
+        import uuid
+        uname = f"testuser_{uuid.uuid4().hex[:8]}"
+        result = await store.create_user(uname, "test123456")
         assert result is True
-        assert user_store.exists("testuser_auth") is True
-        assert user_store.authenticate("testuser_auth", "test123456") is True
+        assert await store.exists(uname) is True
+        assert await store.authenticate(uname, "test123456") is True
 
-    def test_duplicate_user_fails(self) -> None:
-        user_store.create_user("dupe_user", "pass1")
-        assert user_store.create_user("dupe_user", "pass2") is False
+    @pytest.mark.asyncio
+    async def test_duplicate_user_fails(self) -> None:
+        store = await get_user_store()
+        import uuid
+        uname = f"dupe_{uuid.uuid4().hex[:8]}"
+        await store.create_user(uname, "pass1")
+        assert await store.create_user(uname, "pass2") is False
+
+    @pytest.mark.asyncio
+    async def test_admin_role(self) -> None:
+        store = await get_user_store()
+        admin = await store.get_user("admin")
+        assert admin is not None
+        assert admin["role"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_list_users(self) -> None:
+        store = await get_user_store()
+        users = await store.list_users()
+        assert isinstance(users, list)
+        assert len(users) >= 1
+        # admin her zaman var
+        usernames = [u["username"] for u in users]
+        assert "admin" in usernames
+        # password_hash donmemeli
+        for u in users:
+            assert "password_hash" not in u
+
+    @pytest.mark.asyncio
+    async def test_update_role(self) -> None:
+        store = await get_user_store()
+        import uuid
+        uname = f"roleuser_{uuid.uuid4().hex[:8]}"
+        await store.create_user(uname, "pass1234", role="user")
+        assert await store.update_role(uname, "admin") is True
+        user = await store.get_user(uname)
+        assert user is not None
+        assert user["role"] == "admin"
+        # Temizlik
+        await store.delete_user(uname)
+
+    @pytest.mark.asyncio
+    async def test_delete_user(self) -> None:
+        store = await get_user_store()
+        import uuid
+        uname = f"deluser_{uuid.uuid4().hex[:8]}"
+        await store.create_user(uname, "pass1234")
+        assert await store.exists(uname) is True
+        assert await store.delete_user(uname) is True
+        assert await store.exists(uname) is False
+
+    @pytest.mark.asyncio
+    async def test_admin_cannot_be_deleted(self) -> None:
+        store = await get_user_store()
+        assert await store.delete_user("admin") is False
+        assert await store.exists("admin") is True
+
+    @pytest.mark.asyncio
+    async def test_role_validation(self) -> None:
+        store = await get_user_store()
+        # Gecersiz rol
+        assert await store.update_role("admin", "superuser") is False
