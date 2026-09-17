@@ -1,6 +1,8 @@
 """DuckDuckGo tabanli web arama araci (ddgs paketi)."""
 from __future__ import annotations
 
+import re
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -9,29 +11,15 @@ from ddgs import DDGS
 logger = structlog.get_logger(__name__)
 
 
-# Arama stratejileri (sirali denenecek)
-SEARCH_BACKENDS = ["auto", "google", "bing", "duckduckgo"]
-
-
 def search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
-    """DuckDuckGo'da arama yapar. Birden fazla strateji dener."""
-    results: list[dict[str, Any]] = []
-
-    # 1) Direkt Turkce arama
+    """DuckDuckGo'da arama yapar. Sonuclari onem sirasina gore dondurur."""
     results = _do_search(query, max_results)
-    if _has_good_results(results, query):
-        return results
 
-    # 2) Ingilizce cevirerek dene
-    english_query = _translate_query(query)
-    if english_query != query:
-        logger.info("web_search.english_fallback", english_query=english_query)
-        eng_results = _do_search(english_query, max_results)
-        if _has_good_results(eng_results, english_query):
-            return eng_results
+    # Sonuclari puanla (tarih + anahtar kelime)
+    scored = [(r, _score_result(r, query)) for r in results]
+    scored.sort(key=lambda x: x[1], reverse=True)
 
-    # 3) Sonuc yoksa mevcut sonuclari dondur
-    return results
+    return [r for r, _ in scored]
 
 
 def _do_search(query: str, max_results: int) -> list[dict[str, Any]]:
@@ -53,45 +41,38 @@ def _do_search(query: str, max_results: int) -> list[dict[str, Any]]:
     return results
 
 
-def _has_good_results(results: list[dict[str, Any]], query: str) -> bool:
-    """Sonuclarin sorguyla alakali olup olmadigini kontrol eder."""
-    if not results:
-        return False
+def _score_result(result: dict[str, Any], query: str) -> float:
+    """Sonucu puanlar (yuksek = daha alakali/guncel)."""
+    score = 0.0
+    text = (result.get("title", "") + " " + result.get("snippet", "")).lower()
+    query_lower = query.lower()
 
-    # Sorgudaki anahtar kelimeler
-    query_words = [w.lower() for w in query.split() if len(w) > 3]
-    if not query_words:
-        return True
+    # 1) Sorgu kelimeleri eslesmesi
+    query_words = [w for w in query_lower.split() if len(w) > 3]
+    for w in query_words:
+        if w in text:
+            score += 1.0
 
-    # En az 1 anahtar kelime sonuclarda gecmeli
-    for r in results:
-        text = (r.get("title", "") + " " + r.get("snippet", "")).lower()
-        for w in query_words:
-            if w in text:
-                return True
+    # 2) Guncel yil eslesmesi (2026 > 2025 > 2024)
+    current_year = datetime.now().year
+    for year_offset in range(0, 4):
+        year = current_year - year_offset
+        if str(year) in text:
+            score += (4 - year_offset) * 2.0
+            break
 
-    logger.warning("web_search.irrelevant_results", query=query[:50])
-    return False
+    # 3) "Yeni", "son", "seçildi" gibi guncel kelimeler
+    fresh_keywords = ["yeni", "son", "seçildi", "seçim", "2026", "guncel", "şu an"]
+    for kw in fresh_keywords:
+        if kw in text:
+            score += 1.5
 
+    # 4) Eski yillar (2024 ve oncesi) -> puan dusur
+    for old_year in ["2023", "2022", "2021", "2020"]:
+        if old_year in text:
+            score -= 2.0
 
-def _translate_query(query: str) -> str:
-    """Basit Turkce->Ingilizce ceviri (anahtar kelimeler)."""
-    translations = {
-        "dunya kupasi": "World Cup",
-        "sampiyonu": "champion winner",
-        "kim": "who",
-        "ne zaman": "when",
-        "nedir": "what is",
-        "nobel": "Nobel",
-        "odulu": "Prize",
-        "2026": "2026",
-        "2025": "2025",
-        "2024": "2024",
-    }
-    english = query.lower()
-    for tr, en in translations.items():
-        english = english.replace(tr, en)
-    return english.strip()
+    return score
 
 
 def format_results(results: list[dict[str, Any]]) -> str:
@@ -108,13 +89,13 @@ def format_results(results: list[dict[str, Any]]) -> str:
 
 
 if __name__ == "__main__":
-    # Test
     for test_query in [
+        "Fenerbahce baskani kim?",
         "2026 Dunya Kupasi sampiyonu kim?",
         "Python nedir?",
-        "2024 Nobel Odulu kime verildi?",
     ]:
         print(f"\n=== {test_query} ===")
         res = search(test_query, max_results=3)
         for r in res:
             print(f"  - {r['title']}")
+            print(f"    {r['snippet'][:100]}")
