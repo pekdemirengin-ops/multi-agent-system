@@ -206,7 +206,7 @@ class ResearcherAgent(BaseAgent):
             queries.append(f"{subject} ismi nedir")
             queries.append(f"{subject} 2026")
 
-        return queries[:3]
+        return queries[:2]
 
     # ---------- YETERSIZ MI? ----------
     def _is_insufficient(self, answer: str) -> bool:
@@ -288,7 +288,7 @@ class ResearcherAgent(BaseAgent):
             followups.append(f"{subject} resmi aciklama 2026")
             followups.append(f"{subject} 2026 son dakika")
 
-        return followups[:5]
+        return followups[:2]
 
     # ---------- KAYNAK TOPLAMA (COKLU SORGU + GUVEN PUANI) ----------
     def _collect_sources(self, query: str) -> tuple[list[dict], int]:
@@ -309,7 +309,7 @@ class ResearcherAgent(BaseAgent):
             multi = self._generate_multi_queries(query)
             for mq in multi:
                 enriched = self._enrich_query(mq)
-                found = search(enriched, max_results=self.max_search_results)
+                found = search(enriched, max_results=3)
                 all_sources.extend(found)
 
         # Tekrarlari temizle + guven puani ekle
@@ -324,7 +324,7 @@ class ResearcherAgent(BaseAgent):
         # Guven puanina gore sirala
         unique_sources.sort(key=lambda x: x.get("trust", 50), reverse=True)
 
-        return unique_sources[:12], len(sub_queries)
+        return unique_sources[:8], len(sub_queries)
 
     # ---------- OZETLEME ----------
     def _summarize_with_llm(self, query: str, sources: list) -> str:
@@ -389,7 +389,7 @@ class ResearcherAgent(BaseAgent):
         for i, s in enumerate(ranked, 1):
             context_lines.append(f"[KAYNAK {i}] (guven: {s.get('trust', 50)})")
             context_lines.append(f"Baslik: {s['title']}")
-            context_lines.append(f"Icerik: {s['snippet'][:1500]}")
+            context_lines.append(f"Icerik: {s['snippet'][:800]}")
             context_lines.append(f"URL: {s['url'][:100]}")
             context_lines.append("")
 
