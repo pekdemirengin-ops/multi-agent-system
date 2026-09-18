@@ -813,8 +813,88 @@ class ResearcherAgent(BaseAgent):
             return ""
 
     # ---------- ANA HANDLE ----------
+    def _analyze_question(self, query: str) -> list[str]:
+        """Soruyu alt parcalara ayirir. Kac bilgi isteniyor?"""
+        return self._split_query(query)
+
+    def _extract_answer_keywords(self, part: str) -> list[str]:
+        """Bir soru parcasindan anahtar kelimeler cikarir."""
+        import re
+        lower = part.lower()
+
+        keywords = []
+
+        # Soru tipini belirle
+        if any(w in lower for w in ["kim", "kimdir", "kimler"]):
+            keywords.extend(["kim", "adı", "ismi"])
+        if any(w in lower for w in ["hangi takım", "hangi takim", "nerede oynuyor"]):
+            keywords.extend(["takım", "takim", "kulüp", "kulup", "oynuyor"])
+        if any(w in lower for w in ["teknik direktör", "hoca", "coach"]):
+            keywords.extend(["teknik direktör", "teknik direktor", "hoca", "coach", "manager"])
+        if any(w in lower for w in ["hangi ülke", "hangi ulke", "nereli"]):
+            keywords.extend(["ülke", "ulke", "nereli", "vatandaş", "vatandas"])
+        if any(w in lower for w in ["yüz ölçümü", "yuz olcumu", "alan"]):
+            keywords.extend(["yüz ölçümü", "yuz olcumu", "km", "km2", "alan"])
+        if any(w in lower for w in ["nüfus", "nufus", "kaç kişi"]):
+            keywords.extend(["nüfus", "nufus", "kişi", "kisi"])
+        if any(w in lower for w in ["doğum", "dogum", "kaç yaş"]):
+            keywords.extend(["doğum", "dogum", "yaş", "yas", "tarih"])
+
+        return keywords if keywords else [part[:30].lower()]
+
+    def _find_missing_parts(self, query: str, answer: str) -> list[str]:
+        """Cevapta eksik olan soru parcalarini bulur.
+        Parcalardaki ORTAK kelimeleri cikarir, sadece FARKLI kelimeleri kontrol eder.
+        """
+        import re
+
+        parts = self._analyze_question(query)
+        if len(parts) < 2:
+            return []
+
+        # Soru kelimeleri (anlamsiz)
+        question_words = {
+            "kim", "kimdir", "hangi", "nedir", "nerede", "ne", "zaman",
+            "kac", "kaç", "mi", "mu", "midir", "mudur", "ve", "ile",
+            "bir", "bu", "su", "şu", "o",
+        }
+
+        def tokenize(text):
+            words = re.findall(r"\w+", text.lower())
+            return {w for w in words if len(w) >= 3 and w not in question_words}
+
+        # Her parcanin kelimeleri
+        part_words = [tokenize(p) for p in parts]
+
+        # ORTAK kelimeleri bul (tum parcalarda var)
+        common_words = set.intersection(*part_words) if part_words else set()
+
+        # Her parcadan ortak kelimeleri cikar
+        unique_parts = []
+        for i, words in enumerate(part_words):
+            unique = words - common_words
+            unique_parts.append(unique)
+
+        answer_words = tokenize(answer)
+
+        missing = []
+        for i, unique in enumerate(unique_parts):
+            if not unique:
+                continue  # Bu parcada farkli kelime yok (sadece konu ismi)
+
+            # Farkli kelimelerden kaci cevapta var?
+            matched = unique & answer_words
+            match_ratio = len(matched) / len(unique) if unique else 0
+
+            # %30'dan az eslesme varsa eksik (coklu bilgi icin toleransli)
+            if match_ratio < 0.3:
+                missing.append(parts[i].strip())
+
+        return missing
+
+
     async def handle(self, message: Message) -> None:
-        """LLM'SIZ: Tavily answer + kaynaklar. Uydurma YOK."""
+        """Tavily answer + eksik bilgi follow-up."""
         if message.msg_type != "task":
             return
 
@@ -822,9 +902,9 @@ class ResearcherAgent(BaseAgent):
         logger.info("researcher.start", query=query[:80])
 
         try:
-            # Tavily ile ara + dogrudan cevap al
             from tools.web_search import search_with_answer
 
+            # 1) Ana arama
             result = search_with_answer(query, max_results=5)
             tavily_answer = result.get("answer", "")
             sources = result.get("results", [])
@@ -832,36 +912,65 @@ class ResearcherAgent(BaseAgent):
             # Trust ekle
             for s in sources:
                 s["trust"] = _source_trust(s["url"])
-
-            # Kaynaklari guvene gore sirala
             sources.sort(key=lambda x: x.get("trust", 50), reverse=True)
 
-            # CEVAP: Tavily answer (LLM YOK)
+            # 2) Cevap eksik mi kontrol et
+            if tavily_answer:
+                missing = self._find_missing_parts(query, tavily_answer)
+
+                if missing:
+                    logger.info("researcher.missing_parts", parts=missing)
+                    # Eksik her parca icin ayri arama
+                    extra_answers = []
+                    for part in missing[:2]:  # Max 2 ek arama
+                        followup = f"{part} (Türkçe cevap ver)"
+                        try:
+                            extra = search_with_answer(followup, max_results=3)
+                            extra_ans = extra.get("answer", "")
+                            if extra_ans and len(extra_ans) > 20:
+                                extra_answers.append(extra_ans)
+                                # Kaynaklari da ekle
+                                sources.extend(extra.get("results", []))
+                        except Exception as e:
+                            logger.warning("researcher.followup_error", error=str(e))
+
+                    if extra_answers:
+                        # Cevaplari birlestir
+                        tavily_answer = tavily_answer.rstrip(".") + ". " + " ".join(extra_answers)
+                        logger.info("researcher.followup_merged")
+
+            # 3) Final cevap
             if tavily_answer:
                 answer = tavily_answer
-                logger.info("researcher.tavily_answer", answer=tavily_answer[:100])
             elif sources:
-                # Tavily answer yoksa kaynak basliklarini goster
                 answer = "Kaynaklarda bulunan bilgiler:\n\n"
                 for i, s in enumerate(sources[:3], 1):
                     answer += f"{i}. {s['title']}\n   {s['snippet'][:200]}\n\n"
             else:
                 answer = "Bu konuda guvenilir bir sonuc bulunamadi."
 
+            # Tekrarlari temizle
+            seen = set()
+            unique_sources = []
+            for s in sources:
+                if s["url"] not in seen:
+                    seen.add(s["url"])
+                    unique_sources.append(s)
+
             await self.send(
                 message.sender,
                 {
                     "answer": answer,
                     "research": answer,
-                    "sources": [{"title": s["title"], "url": s["url"]} for s in sources],
+                    "sources": [{"title": s["title"], "url": s["url"]} for s in unique_sources[:8]],
                     "query": query,
-                    "source_count": len(sources),
+                    "source_count": len(unique_sources),
                     "summarized": False,
                     "tavily_answer_used": bool(tavily_answer),
                 },
                 msg_type="result",
             )
-            logger.info("researcher.done", sources=len(sources), tavily=bool(tavily_answer))
+            logger.info("researcher.done", sources=len(unique_sources), tavily=bool(tavily_answer))
 
         except Exception as e:
             logger.exception("researcher.error", error=str(e))
