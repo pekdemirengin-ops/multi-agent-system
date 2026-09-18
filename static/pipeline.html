@@ -435,7 +435,7 @@ function handleStreamEvent(data, stepsContainer, resultContainer) {
             <div class="step-header">
                 <div>
                     <span class="step-name">${data.step}. ${data.agent}</span>
-                    <span class="step-duration">${${(data.duration_ms / 1000).toFixed(1)}sn</span>
+                    <span class="step-duration">${(data.duration_ms / 1000).toFixed(1)}sn</span>
                 </div>
                 <span class="step-status ok">BASARILI</span>
             </div>
@@ -599,7 +599,7 @@ function renderHistory(items) {
                 <span class="history-item-status ${status}">${statusText}</span>
             </div>
             <div class="history-item-query">${escapeHtml(item.query)}</div>
-            <div class="history-item-meta">${${(item.duration_ms / 1000).toFixed(1)}sn | ${item.step_count} adim | ${date}</div>
+            <div class="history-item-meta">${(item.duration_ms / 1000).toFixed(1)}sn | ${item.step_count} adim | ${date}</div>
         `;
         div.onclick = () => {
             document.getElementById("queryInput").value = item.query;
