@@ -1,0 +1,359 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Agent Pipeline</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+.container {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 30px;
+}
+h1 { color: #333; margin-bottom: 8px; font-size: 24px; }
+.subtitle { color: #888; font-size: 14px; margin-bottom: 24px; }
+
+.pipeline-select {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+.pipeline-btn {
+    padding: 12px 20px;
+    border: 2px solid #e5e5ea;
+    background: white;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+    transition: all 0.2s;
+}
+.pipeline-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+}
+.pipeline-btn.active {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+}
+
+.input-area {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.input-area input {
+    flex: 1;
+    padding: 14px 18px;
+    border: 2px solid #e5e5ea;
+    border-radius: 12px;
+    font-size: 15px;
+    outline: none;
+}
+.input-area input:focus { border-color: #667eea; }
+.input-area button {
+    padding: 14px 28px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.input-area button:hover { background: #5568d3; }
+.input-area button:disabled { background: #ccc; cursor: not-allowed; }
+
+.steps {
+    margin-top: 20px;
+}
+.step {
+    border: 1px solid #e5e5ea;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: #fafafc;
+}
+.step-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.step-name {
+    font-weight: 700;
+    color: #333;
+    font-size: 14px;
+}
+.step-status {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+.step-status.ok { background: #d1fae5; color: #065f46; }
+.step-status.fail { background: #fee2e2; color: #991b1b; }
+.step-status.pending { background: #fef3c7; color: #92400e; }
+.step-duration {
+    color: #888;
+    font-size: 12px;
+    margin-left: 8px;
+}
+.step-content {
+    font-size: 13px;
+    color: #555;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.result {
+    margin-top: 20px;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    color: white;
+}
+.result h3 {
+    font-size: 14px;
+    margin-bottom: 10px;
+    opacity: 0.9;
+}
+.result-content {
+    font-size: 15px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+.result-meta {
+    margin-top: 12px;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+    font-size: 16px;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #667eea;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+}
+.back-link:hover { text-decoration: underline; }
+
+@media (max-width: 600px) {
+    .container { padding: 20px; }
+    h1 { font-size: 18px; }
+    .pipeline-btn { font-size: 12px; padding: 10px 14px; }
+    .input-area { flex-direction: column; }
+    .input-area button { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+    <a href="/" class="back-link"> Ana Sayfa</a>
+    <h1>Multi-Agent Pipeline</h1>
+    <p class="subtitle">Birden fazla agent sıralı çalışır  daha güvenilir cevap</p>
+
+    <div class="pipeline-select" id="pipelineSelect">
+        <button class="pipeline-btn" data-pipeline="">Yükleniyor...</button>
+    </div>
+
+    <div class="input-area">
+        <input type="text" id="queryInput" placeholder="Sorunuzu yazın..." autocomplete="off">
+        <button id="runBtn" onclick="runPipeline()">Çalıştır</button>
+    </div>
+
+    <div id="stepsContainer" class="steps"></div>
+    <div id="resultContainer"></div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+let token = localStorage.getItem("token");
+let selectedPipeline = "research";
+
+// Login kontrolu
+if (!token) {
+    window.location.href = "/";
+}
+
+function authHeaders() {
+    return {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+    };
+}
+
+// Pipeline listesini yukle
+async function loadPipelines() {
+    try {
+        const res = await fetch(`${API_BASE}/api/pipeline/list`, { headers: authHeaders() });
+        if (!res.ok) {
+            if (res.status === 401) {
+                localStorage.removeItem("token");
+                window.location.href = "/";
+                return;
+            }
+        }
+        const data = await res.json();
+        const container = document.getElementById("pipelineSelect");
+        container.innerHTML = "";
+
+        const icons = {
+            "research": "",
+            "code": "",
+            "content": "",
+            "social": "",
+            "fact": ""
+        };
+
+        data.pipelines.forEach((p, idx) => {
+            const btn = document.createElement("button");
+            btn.className = "pipeline-btn" + (idx === 0 ? " active" : "");
+            btn.dataset.pipeline = p.name;
+            btn.textContent = `${icons[p.name] || ""} ${p.name}`;
+            btn.onclick = () => selectPipeline(p.name, btn);
+            container.appendChild(btn);
+        });
+
+        if (data.pipelines.length > 0) {
+            selectedPipeline = data.pipelines[0].name;
+        }
+    } catch (e) {
+        console.error("loadPipelines:", e);
+    }
+}
+
+function selectPipeline(name, btn) {
+    selectedPipeline = name;
+    document.querySelectorAll(".pipeline-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+}
+
+async function runPipeline() {
+    const query = document.getElementById("queryInput").value.trim();
+    if (!query) return;
+
+    const runBtn = document.getElementById("runBtn");
+    const stepsContainer = document.getElementById("stepsContainer");
+    const resultContainer = document.getElementById("resultContainer");
+
+    runBtn.disabled = true;
+    runBtn.textContent = "Çalışıyor...";
+    stepsContainer.innerHTML = `<div class="loading">Pipeline çalışıyor... (${selectedPipeline})</div>`;
+    resultContainer.innerHTML = "";
+
+    const startTime = Date.now();
+
+    try {
+        const res = await fetch(`${API_BASE}/api/pipeline/run`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({
+                pipeline: selectedPipeline,
+                query: query,
+                timeout: 180
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            stepsContainer.innerHTML = `<div class="step"><div class="step-content" style="color:#ef4444;">Hata: ${err.detail || "Bilinmeyen"}</div></div>`;
+            runBtn.disabled = false;
+            runBtn.textContent = "Çalıştır";
+            return;
+        }
+
+        const data = await res.json();
+        renderSteps(data);
+        renderResult(data);
+
+    } catch (e) {
+        stepsContainer.innerHTML = `<div class="step"><div class="step-content" style="color:#ef4444;">Bağlantı hatası: ${e.message}</div></div>`;
+    }
+
+    runBtn.disabled = false;
+    runBtn.textContent = "Çalıştır";
+}
+
+function renderSteps(data) {
+    const container = document.getElementById("stepsContainer");
+    container.innerHTML = "";
+
+    data.steps.forEach(step => {
+        const div = document.createElement("div");
+        div.className = "step";
+
+        const status = step.success ? "ok" : "fail";
+        const statusText = step.success ? "BAŞARILI" : "HATA";
+
+        div.innerHTML = `
+            <div class="step-header">
+                <div>
+                    <span class="step-name">${step.step}. ${step.agent}</span>
+                    <span class="step-duration">${step.duration_ms}ms</span>
+                </div>
+                <span class="step-status ${status}">${statusText}</span>
+            </div>
+            <div class="step-content">${escapeHtml(step.output || step.error || "")}</div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function renderResult(data) {
+    const container = document.getElementById("resultContainer");
+    if (!data.success) {
+        container.innerHTML = `<div class="result" style="background:#ef4444;"><h3>HATA</h3><div class="result-content">${escapeHtml(data.error || "Bilinmeyen hata")}</div></div>`;
+        return;
+    }
+    container.innerHTML = `
+        <div class="result">
+            <h3>SONUÇ</h3>
+            <div class="result-content">${escapeHtml(data.final_answer)}</div>
+            <div class="result-meta">
+                Pipeline: ${data.pipeline_name} | Süre: ${data.duration_ms}ms | Adım: ${data.steps.length}
+            </div>
+        </div>
+    `;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Enter ile çalıştır
+document.getElementById("queryInput").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") runPipeline();
+});
+
+// Init
+loadPipelines();
+</script>
+
+</body>
+</html>
