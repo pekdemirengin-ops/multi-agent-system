@@ -507,13 +507,43 @@ try {
 const res = await fetch(`${API_BASE}/api/agents`);
 const data = await res.json();
 agentsBar.innerHTML = "";
+
+// 1) AUTO (varsayilan)
 const autoBtn = document.createElement("button");
 autoBtn.className = "agent-btn active";
 autoBtn.textContent = "Auto";
+autoBtn.title = "Otomatik - sorunuzu yazin, sistem karar verir";
 autoBtn.onclick = () => {
 currentAgent = "auto";
 document.querySelectorAll(".agent-btn").forEach((b) => b.classList.remove("active"));
 autoBtn.classList.add("active");
+};
+agentsBar.appendChild(autoBtn);
+
+// 2) SIK KULLANILAN 5
+const popular = [
+{ name: "researcher", label: "Arastirma" },
+{ name: "coder", label: "Kod" },
+{ name: "summarizer", label: "Ozet" },
+{ name: "translator", label: "Ceviri" },
+{ name: "calculator", label: "Matematik" },
+];
+
+popular.forEach((p) => {
+const btn = document.createElement("button");
+btn.className = "agent-btn";
+btn.textContent = p.label;
+btn.title = p.name;
+btn.onclick = () => {
+currentAgent = p.name;
+document.querySelectorAll(".agent-btn").forEach((b) => b.classList.remove("active"));
+btn.classList.add("active");
+};
+agentsBar.appendChild(btn);
+});
+
+statusText.textContent = "Hazir - " + data.count + " agent (6 gorunur)";
+} catch (e) { statusText.textContent = "Baglanti hatasi"; }
 };
 agentsBar.appendChild(autoBtn);
 data.agents.forEach((agent) => {
