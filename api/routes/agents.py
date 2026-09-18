@@ -214,7 +214,7 @@ async def ask(
     get_agent(chosen_agent)
 
     # Bazi agent'lar icin hafiza context'i KULLANMA
-    NO_HISTORY_AGENTS = {"researcher", "log_watcher", "pathfinder", "npc", "llm", "coder"}
+    NO_HISTORY_AGENTS = {"researcher", "log_watcher", "pathfinder", "npc", "llm", "coder", "translator", "calculator", "file_manager", "fact_checker", "data_analyst", "quiz_maker", "email_composer", "social_media"}
     if chosen_agent in NO_HISTORY_AGENTS:
         full_message = req.message
     elif history_text:

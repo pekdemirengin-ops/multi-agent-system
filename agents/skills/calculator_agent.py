@@ -22,11 +22,25 @@ class CalculatorAgent(BaseAgent):
         if message.msg_type != "task":
             return
         try:
-            expr = str(message.content)
-            # Matematiksel ifadeyi cikar
-            for w in ["hesapla", "kac eder", "kaç eder", "sonuc", "sonuç"]:
-                expr = expr.replace(w, "")
-            expr = expr.strip(" :.,!?")
+            import re
+            raw = str(message.content)
+
+            # Sadece matematiksel ifadeyi bul (rakam, operator)
+            # "2 + 3 * 4 hesapla" -> "2 + 3 * 4"
+            math_pattern = r"[0-9]+(?:\s*[+\-*/^()]+\s*[0-9]+)+"
+            matches = re.findall(math_pattern, raw)
+
+            if matches:
+                expr = max(matches, key=len).strip()
+            else:
+                # Alternatif: rakam ve operatorleri topla
+                cleaned = re.sub(r"[^0-9+\-*/().^\s]", " ", raw)
+                cleaned = re.sub(r"\s+", " ", cleaned).strip()
+                expr = cleaned
+
+            if not expr:
+                await self.send(message.sender, {"answer": "Matematiksel ifade bulunamadi."}, msg_type="result")
+                return
 
             result = await self.skill(expression=expr)
             if "error" in result:
