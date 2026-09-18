@@ -109,24 +109,17 @@ PIPELINES: dict[str, list[PipelineStep]] = {
         ),
     ],
     "summary": [
-        PipelineStep(agent="researcher", name="Arastirma"),
         PipelineStep(
             agent="summarizer",
             name="Ozetleme",
-            transform=lambda prev: f"Su metni ozetle: {prev.get('answer', str(prev))[:1000]}",
-        ),
-        PipelineStep(
-            agent="quiz_maker",
-            name="Quiz",
-            transform=lambda prev: f"Su konu hakkinda 3 soruluk quiz hazirla: {prev.get('answer', str(prev))[:500]}",
+            transform=lambda prev: prev if isinstance(prev, str) else prev.get("answer", str(prev)),
         ),
     ],
     "data": [
-        PipelineStep(agent="researcher", name="Arastirma"),
         PipelineStep(
             agent="data_analyst",
             name="Analiz",
-            transform=lambda prev: f"Su veriyi analiz et: {prev.get('answer', str(prev))[:500]}",
+            transform=lambda prev: prev if isinstance(prev, str) else prev.get("answer", str(prev)),
         ),
     ],
 }
