@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.routes import agents, auth, health, memory, pipeline, security, stream, team, ws
+from api.routes import autonomous
 
 logger = structlog.get_logger(__name__)
 
@@ -57,6 +58,7 @@ app.include_router(memory.router)
 app.include_router(security.router)
 app.include_router(stream.router)
 app.include_router(pipeline.router)
+app.include_router(autonomous.router)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
