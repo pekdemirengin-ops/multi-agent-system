@@ -9,7 +9,7 @@ import structlog
 
 from core.base_agent import BaseAgent, Message
 from tools.llm_client import GroqLLMClient
-from tools.web_search import search
+from tools.web_search import search, search_with_answer
 
 logger = structlog.get_logger(__name__)
 
@@ -414,6 +414,94 @@ class ResearcherAgent(BaseAgent):
 
         return llm_answer
 
+        # SAYI DOGRULAMA (yuz olcumu, nufus, tarih)
+        number_check = self._validate_numbers(sources, query)
+        if number_check:
+            return number_check
+
+
+
+    def _validate_numbers(self, sources: list[dict], query: str) -> str | None:
+        """Kaynaklarda sayi celiskisi varsa cozer. Baglam + TR kaynak oncelikli."""
+        import re
+        from collections import Counter
+
+        number_keywords = ["yüz ölçümü", "yuz olcumu", "nüfus", "nufus",
+                           "kaç km", "kac km", "kaç kişi", "kac kisi",
+                           "kaç yıl", "kac yil", "rakım", "rakim"]
+        query_lower = query.lower()
+        if not any(k in query_lower for k in number_keywords):
+            return None
+
+        subjects = re.findall(r"\b([A-ZÇÖŞÜ][a-zçğıöşü]+)\b", query)
+        subjects_lower = [s.lower() for s in subjects]
+
+        # Virgul/nokta iceren sayilar dahil
+        number_patterns = [
+            r"(\d{1,2}[,.]?\d{3})\s*(?:km2|km|kilometrekare|km\s*kare)",
+            r"(\d{3,5})\s*(?:km2|km|kilometrekare|km\s*kare)",
+        ]
+
+        def _clean_number(s):
+            """Virgul/nokta temizle, sadece rakam birak."""
+            return s.replace(",", "").replace(".", "")
+
+        source_numbers = []
+        for s in sources:
+            text = (s['title'] + " " + s['snippet']).lower()
+            url = s['url'].lower()
+
+            for pattern in number_patterns:
+                for match in re.finditer(pattern, text):
+                    number = _clean_number(match.group(1))
+
+                    # Baglam kontrolu
+                    start_pos = max(0, match.start() - 200)
+                    end_pos = min(len(text), match.end() + 200)
+                    context = text[start_pos:end_pos]
+
+                    subject_in_context = any(
+                        subj in context for subj in subjects_lower
+                        if len(subj) > 3
+                    )
+
+                    if subject_in_context:
+                        source_numbers.append({
+                            "number": number,
+                            "url": url,
+                            "title": s['title'][:60],
+                        })
+
+        if not source_numbers:
+            return None
+
+        counter = Counter()
+        number_info = {}
+        for item in source_numbers:
+            counter[item["number"]] += 1
+            if item["number"] not in number_info:
+                number_info[item["number"]] = item
+
+        if len(counter) == 1:
+            number = list(counter.keys())[0]
+            return f"{number} km2"
+
+        sorted_numbers = counter.most_common()
+
+        # TR kaynak oncelikli
+        for number, count in sorted_numbers:
+            info = number_info[number]
+            url = info["url"]
+            if ".gov.tr" in url or ".edu.tr" in url or ".tr" in url:
+                logger.info("researcher.number_conflict_resolved",
+                            number=number, reason="TR source")
+                return f"Kaynaklarda iki farkli deger var. Turkiye resmi/akademik kaynaklarina gore: {number} km2"
+
+        most_common = sorted_numbers[0]
+        logger.info("researcher.number_conflict_resolved",
+                    number=most_common[0], reason="most common")
+        return f"Kaynaklarda iki farkli deger var. En cok gecen deger: {most_common[0]} km2"
+
 
     def _split_query(self, query: str) -> list[str]:
         """Soruyu alt sorulara boler VE her parcaya baglam ekler."""
@@ -559,6 +647,48 @@ class ResearcherAgent(BaseAgent):
         return followups[:2]
 
     # ---------- KAYNAK TOPLAMA (COKLU SORGU + GUVEN PUANI) ----------
+    def _collect_sources_with_answer(self, query: str) -> tuple[list[dict], int, str]:
+        """Kaynak toplar VE Tavily answer'i doner."""
+        from tools.web_search import search_with_answer
+
+        sub_queries = self._split_query(query)
+        all_sources = []
+        tavily_answer = ""
+
+        # Tum sorgulari topla
+        all_queries = []
+        if len(sub_queries) > 1:
+            for sq in sub_queries:
+                multi = self._generate_multi_queries(sq)
+                all_queries.extend(multi[:2])
+        else:
+            multi = self._generate_multi_queries(query)
+            all_queries.extend(multi[:2])
+
+        # Ilk sorgu icin include_answer=True
+        if all_queries:
+            first_result = search_with_answer(all_queries[0], max_results=3)
+            all_sources.extend(first_result["results"])
+            tavily_answer = first_result.get("answer", "")
+
+        # Diger sorgular icin normal search
+        for q in all_queries[1:]:
+            found = search(q, max_results=3)
+            all_sources.extend(found)
+
+        # Tekrarlari temizle
+        seen_urls = set()
+        unique_sources = []
+        for s in all_sources:
+            if s["url"] not in seen_urls:
+                seen_urls.add(s["url"])
+                s["trust"] = _source_trust(s["url"])
+                unique_sources.append(s)
+
+        unique_sources.sort(key=lambda x: x.get("trust", 50), reverse=True)
+
+        return unique_sources[:12], len(sub_queries), tavily_answer
+
     def _collect_sources(self, query: str) -> tuple[list[dict], int]:
         """Tek veya coklu arama yapar. PARALEL arama."""
         sub_queries = self._split_query(query)
@@ -684,6 +814,7 @@ class ResearcherAgent(BaseAgent):
 
     # ---------- ANA HANDLE ----------
     async def handle(self, message: Message) -> None:
+        """LLM'SIZ: Tavily answer + kaynaklar. Uydurma YOK."""
         if message.msg_type != "task":
             return
 
@@ -691,51 +822,31 @@ class ResearcherAgent(BaseAgent):
         logger.info("researcher.start", query=query[:80])
 
         try:
-            sources, sub_count = self._collect_sources(query)
+            # Tavily ile ara + dogrudan cevap al
+            from tools.web_search import search_with_answer
 
-            if not sources:
-                answer = "Bu konuda web'de guvenilir bir sonuc bulunamadi."
+            result = search_with_answer(query, max_results=5)
+            tavily_answer = result.get("answer", "")
+            sources = result.get("results", [])
+
+            # Trust ekle
+            for s in sources:
+                s["trust"] = _source_trust(s["url"])
+
+            # Kaynaklari guvene gore sirala
+            sources.sort(key=lambda x: x.get("trust", 50), reverse=True)
+
+            # CEVAP: Tavily answer (LLM YOK)
+            if tavily_answer:
+                answer = tavily_answer
+                logger.info("researcher.tavily_answer", answer=tavily_answer[:100])
+            elif sources:
+                # Tavily answer yoksa kaynak basliklarini goster
+                answer = "Kaynaklarda bulunan bilgiler:\n\n"
+                for i, s in enumerate(sources[:3], 1):
+                    answer += f"{i}. {s['title']}\n   {s['snippet'][:200]}\n\n"
             else:
-                summary = self._summarize_with_llm(query, sources)
-                if summary:
-                    # HIBRIT: LLM cevabini regex ile dogrula
-                    validated = self._validate_llm_answer(summary, sources, query)
-                    answer = validated
-                    if validated != summary:
-                        logger.info("researcher.hallucination_fixed")
-                else:
-                    today = datetime.now().strftime("%Y-%m-%d")
-                    lines = [f"{today} itibariyle web arama sonuclari:", f"Sorgu: {query}", ""]
-                    for i, s in enumerate(sources, 1):
-                        lines.append(f"{i}. {s['title']}")
-                        lines.append(f"   {s['snippet']}")
-                        lines.append("")
-                    answer = "\n".join(lines)
-
-                # FOLLOW-UP
-                if self._is_insufficient(answer):
-                    logger.info("researcher.followup_needed", query=query[:60])
-                    followups = self._generate_followup_queries(query)
-                    logger.info("researcher.followup_queries", queries=followups)
-
-                    extra_sources = []
-                    for fq in followups:
-                        found = search(fq, max_results=3)
-                        for s in found:
-                            s["trust"] = _source_trust(s["url"])
-                        extra_sources.extend(found)
-
-                    seen_urls = {s["url"] for s in sources}
-                    new_sources = [s for s in extra_sources if s["url"] not in seen_urls]
-
-                    if new_sources:
-                        logger.info("researcher.followup_found", new_count=len(new_sources))
-                        all_sources = sources + new_sources
-                        summary2 = self._summarize_with_llm(query, all_sources)
-                        if summary2:
-                            answer = summary2
-                            sources = all_sources
-                            logger.info("researcher.followup_success")
+                answer = "Bu konuda guvenilir bir sonuc bulunamadi."
 
             await self.send(
                 message.sender,
@@ -745,16 +856,17 @@ class ResearcherAgent(BaseAgent):
                     "sources": [{"title": s["title"], "url": s["url"]} for s in sources],
                     "query": query,
                     "source_count": len(sources),
-                    "summarized": bool(self.llm and sources),
-                    "multi_search": sub_count > 1,
+                    "summarized": False,
+                    "tavily_answer_used": bool(tavily_answer),
                 },
                 msg_type="result",
             )
-            logger.info("researcher.done", sources=len(sources), multi_search=sub_count > 1)
+            logger.info("researcher.done", sources=len(sources), tavily=bool(tavily_answer))
 
         except Exception as e:
             logger.exception("researcher.error", error=str(e))
             await self.send(message.sender, {"error": str(e)}, msg_type="error")
+
 
     def __repr__(self) -> str:
         return f"<ResearcherAgent name={self.name!r} (multi-query, trust-ranked, chain-of-thought)>"
