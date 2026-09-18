@@ -57,7 +57,7 @@ class TestPipelineStep:
     def test_step_get_input_dict(self) -> None:
         step = PipelineStep(agent="researcher")
         result = step.get_input({"answer": "test cevap"}, "soru")
-        assert result == "test cevabi"
+        assert result == "test cevap"
 
     def test_step_get_input_with_transform(self) -> None:
         step = PipelineStep(
