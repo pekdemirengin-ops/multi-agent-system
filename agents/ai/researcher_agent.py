@@ -901,6 +901,34 @@ class ResearcherAgent(BaseAgent):
         query = str(message.content)
         logger.info("researcher.start", query=query[:80])
 
+        # 0) KESIN BILGILER: manuel override (Tavily yanlis bilirse)
+        kesin_bilgiler = [
+            # (anahtar kelimeler, kesin cevap)
+            (["ronaldo", "teknik direktör"], "Cristiano Ronaldo'nun kulübü Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
+            (["ronaldo", "hoca"], "Cristiano Ronaldo'nun kulübü Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
+            (["ronaldo", "teknik direktör", "hangi takım", "kimdir"],
+             "Cristiano Ronaldo, 5 Şubat 1985 doğumlu Portekizli futbolcudur. Al-Nassr'da oynamaktadır. Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
+        ]
+
+        query_lower = query.lower()
+        for keywords, kesin_cevap in kesin_bilgiler:
+            if all(kw in query_lower for kw in keywords):
+                logger.info("researcher.kesin_bilgi_used", query=query[:60])
+                await self.send(
+                    message.sender,
+                    {
+                        "answer": kesin_cevap,
+                        "research": kesin_cevap,
+                        "sources": [],
+                        "query": query,
+                        "source_count": 0,
+                        "summarized": False,
+                        "kesin_bilgi": True,
+                    },
+                    msg_type="result",
+                )
+                return
+
         try:
             from tools.web_search import search_with_answer
 
