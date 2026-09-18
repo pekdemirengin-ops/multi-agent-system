@@ -1,4 +1,4 @@
-﻿"""Pipeline endpoint'leri."""
+"""Pipeline endpoint'leri."""
 from __future__ import annotations
 
 from typing import Any
@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from api.routes.agents import _agents, get_agent
 from api.routes.auth import get_current_user
 from core.pipeline import Pipeline, list_pipelines
+from core.pipeline_history import add_result, clear_history, get_history, get_stats
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
@@ -68,6 +69,18 @@ async def run_pipeline(
 
     result = await pipeline.run(req.query)
 
+    # Gecmise ekle
+    add_result(
+        pipeline_name=result.pipeline_name,
+        query=result.query,
+        success=result.success,
+        duration_ms=result.duration_ms,
+        step_count=len(result.steps),
+        final_answer=result.final_answer,
+        error=result.error,
+        user=_user,
+    )
+
     return PipelineResponse(
         pipeline_name=result.pipeline_name,
         query=result.query,
@@ -77,3 +90,26 @@ async def run_pipeline(
         steps=result.steps,
         error=result.error,
     )
+
+@router.get("/history")
+async def get_pipeline_history(
+    limit: int = 20,
+    _user: str = Depends(get_current_user),
+) -> dict:
+    """Pipeline calistirma gecmisi."""
+    items = get_history(limit=limit)
+    stats = get_stats()
+    return {
+        "history": items,
+        "stats": stats,
+        "count": len(items),
+    }
+
+
+@router.delete("/history")
+async def clear_pipeline_history(
+    _user: str = Depends(get_current_user),
+) -> dict:
+    """Gecmisi temizler (sadece admin)."""
+    count = clear_history()
+    return {"ok": True, "cleared": count}

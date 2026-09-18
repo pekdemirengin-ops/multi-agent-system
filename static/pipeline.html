@@ -150,6 +150,80 @@ h1 { color: #333; margin-bottom: 8px; font-size: 24px; }
     font-size: 16px;
 }
 
+/* HISTORY */
+.history-section {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 2px solid #e5e5ea;
+}
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+.history-header h2 {
+    font-size: 16px;
+    color: #333;
+}
+.history-clear {
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.history-clear:hover { background: #dc2626; }
+.history-item {
+    border: 1px solid #e5e5ea;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.history-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+.history-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.history-item-pipeline {
+    font-weight: 700;
+    color: #667eea;
+    font-size: 13px;
+}
+.history-item-status {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+.history-item-status.ok { background: #d1fae5; color: #065f46; }
+.history-item-status.fail { background: #fee2e2; color: #991b1b; }
+.history-item-query {
+    color: #555;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+.history-item-meta {
+    color: #888;
+    font-size: 11px;
+}
+.history-empty {
+    text-align: center;
+    color: #888;
+    padding: 20px;
+    font-size: 13px;
+}
 .back-link {
     display: inline-block;
     margin-bottom: 20px;
@@ -187,6 +261,17 @@ h1 { color: #333; margin-bottom: 8px; font-size: 24px; }
 
     <div id="stepsContainer" class="steps"></div>
     <div id="resultContainer"></div>
+
+    <!-- PIPELINE GECMISI -->
+    <div class="history-section">
+        <div class="history-header">
+            <h2> Son Calistirmalar</h2>
+            <button class="history-clear" onclick="clearHistory()">Temizle</button>
+        </div>
+        <div id="historyContainer">
+            <div class="history-empty">Henuz calistirma yok.</div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -385,6 +470,60 @@ document.getElementById("queryInput").addEventListener("keypress", (e) => {
 
 // Init
 loadPipelines();
+loadHistory();
+
+// History
+async function loadHistory() {
+    try {
+        const res = await fetch(`${API_BASE}/api/pipeline/history?limit=10`, { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        renderHistory(data.history || []);
+    } catch (e) {
+        console.error("loadHistory:", e);
+    }
+}
+
+function renderHistory(items) {
+    const container = document.getElementById("historyContainer");
+    if (!items || items.length === 0) {
+        container.innerHTML = '<div class="history-empty">Henuz calistirma yok.</div>';
+        return;
+    }
+    container.innerHTML = "";
+    items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "history-item";
+        const status = item.success ? "ok" : "fail";
+        const statusText = item.success ? "BASARILI" : "HATA";
+        const date = new Date(item.timestamp).toLocaleString("tr-TR");
+        div.innerHTML = `
+            <div class="history-item-header">
+                <span class="history-item-pipeline">${item.pipeline}</span>
+                <span class="history-item-status ${status}">${statusText}</span>
+            </div>
+            <div class="history-item-query">${escapeHtml(item.query)}</div>
+            <div class="history-item-meta">${item.duration_ms}ms | ${item.step_count} adim | ${date}</div>
+        `;
+        div.onclick = () => {
+            document.getElementById("queryInput").value = item.query;
+        };
+        container.appendChild(div);
+    });
+}
+
+async function clearHistory() {
+    if (!confirm("Tum gecmis silinsin mi?")) return;
+    try {
+        await fetch(`${API_BASE}/api/pipeline/history`, {
+            method: "DELETE",
+            headers: authHeaders(),
+        });
+        loadHistory();
+    } catch (e) {
+        console.error("clearHistory:", e);
+    }
+}
 </script>
 
 </body>
