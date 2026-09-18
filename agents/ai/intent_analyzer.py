@@ -28,6 +28,35 @@ Soru tiplerini tani:
 ONEMLI: "kimler", "hangileri", "hepsi", "kac tane" gibi COGUL sorulari tespit et.
 Cogul sorularda: birden fazla varlik varsa HEPSINI getir.
 
+COGRAFI/GRUP COKLUK KURALI (COK ONEMLI):
+Bazi konularda DOGAL OLARAK birden fazla varlik vardir:
+- "Istanbul Bogazi kopruleri" -> 3 kopru: 15 Temmuz Sehitler, Fatih Sultan Mehmet, Yavuz Sultan Selim
+- "Turkiye'nin en kalabalik sehirleri" -> Istanbul, Ankara, Izmir, Bursa, Antalya
+- "Akdeniz'e kiyisi olan iller" -> Antalya, Mugla, Adana, Mersin, Hatay, ...
+- "BM Guvenlik Konseyi daimi uyeleri" -> ABD, Rusya, Cin, Ingiltere, Fransa
+- "Fatih Sultan Mehmet'in seferleri" -> Istanbul, Trabzon, Otlukbeli, ...
+
+EGER soru "kimler", "hangileri", "hepsi", "kac tane" iceriyorsa VEYA konu dogal olarak cokluysa:
+- is_plural = true
+- Her varlik icin AYRI sorgu yaz
+- SADECE "Istanbul Bogaz Koprusu" DEGIL, her kopru icin ayri sorgu
+
+ORNEK (cografi cokluk):
+Soru: "Istanbul Bogaz koprulerini kimler yapti?"
+Cevap: {
+  "intent": "kimler",
+  "is_plural": true,
+  "subject": "Istanbul Bogazi kopruleri",
+  "expected_count": 3,
+  "fields": ["kopru adi", "yapimci", "yil"],
+  "turkish_queries": [
+    "15 Temmuz Sehitler Koprusu yapimci yil",
+    "Fatih Sultan Mehmet Koprusu yapimci yil",
+    "Yavuz Sultan Selim Koprusu yapimci yil",
+    "Istanbul Bogazi kopruleri listesi"
+  ]
+}
+
 SADECE su JSON formatinda cevap ver:
 {
   "intent": "tanit|kimdir|kimler|nerede|ne_zaman|sayisal|liste|karsilastir|neden|genel",
