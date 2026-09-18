@@ -346,14 +346,12 @@ async function runPipeline() {
     const resultContainer = document.getElementById("resultContainer");
 
     runBtn.disabled = true;
-    runBtn.textContent = "Çalışıyor...";
-    stepsContainer.innerHTML = `<div class="loading">Pipeline çalışıyor... (${selectedPipeline})</div>`;
+    runBtn.textContent = "Calisiyor...";
+    stepsContainer.innerHTML = "";
     resultContainer.innerHTML = "";
 
-    const startTime = Date.now();
-
     try {
-        const res = await fetch(`${API_BASE}/api/pipeline/run`, {
+        const res = await fetch(`${API_BASE}/api/pipeline/stream`, {
             method: "POST",
             headers: authHeaders(),
             body: JSON.stringify({
@@ -367,20 +365,118 @@ async function runPipeline() {
             const err = await res.json();
             stepsContainer.innerHTML = `<div class="step"><div class="step-content" style="color:#ef4444;">Hata: ${err.detail || "Bilinmeyen"}</div></div>`;
             runBtn.disabled = false;
-            runBtn.textContent = "Çalıştır";
+            runBtn.textContent = "Calistir";
             return;
         }
 
-        const data = await res.json();
-        renderSteps(data);
-        renderResult(data);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        handleStreamEvent(data, stepsContainer, resultContainer);
+                    } catch (e) {
+                        console.error("SSE parse:", e);
+                    }
+                }
+            }
+        }
 
     } catch (e) {
-        stepsContainer.innerHTML = `<div class="step"><div class="step-content" style="color:#ef4444;">Bağlantı hatası: ${e.message}</div></div>`;
+        stepsContainer.innerHTML = `<div class="step"><div class="step-content" style="color:#ef4444;">Baglanti hatasi: ${e.message}</div></div>`;
     }
 
     runBtn.disabled = false;
-    runBtn.textContent = "Çalıştır";
+    runBtn.textContent = "Calistir";
+    loadHistory();
+}
+
+function handleStreamEvent(data, stepsContainer, resultContainer) {
+    if (data.type === "start") {
+        stepsContainer.innerHTML = "";
+        resultContainer.innerHTML = "";
+        return;
+    }
+
+    if (data.type === "step_start") {
+        const div = document.createElement("div");
+        div.className = "step";
+        div.id = `step-${data.step}`;
+        div.innerHTML = `
+            <div class="step-header">
+                <div>
+                    <span class="step-name">${data.step}. ${data.agent}</span>
+                    <span class="step-duration">...</span>
+                </div>
+                <span class="step-status pending">CALISIYOR</span>
+            </div>
+            <div class="step-content" style="opacity:0.6;">Bekleniyor...</div>
+        `;
+        stepsContainer.appendChild(div);
+        stepsContainer.scrollTop = stepsContainer.scrollHeight;
+        return;
+    }
+
+    if (data.type === "step_done") {
+        const div = document.getElementById(`step-${data.step}`);
+        if (!div) return;
+        div.innerHTML = `
+            <div class="step-header">
+                <div>
+                    <span class="step-name">${data.step}. ${data.agent}</span>
+                    <span class="step-duration">${data.duration_ms}ms</span>
+                </div>
+                <span class="step-status ok">BASARILI</span>
+            </div>
+            <div class="step-content">${escapeHtml(data.output || "")}</div>
+        `;
+        stepsContainer.scrollTop = stepsContainer.scrollHeight;
+        return;
+    }
+
+    if (data.type === "step_error") {
+        const div = document.getElementById(`step-${data.step}`);
+        if (!div) return;
+        div.innerHTML = `
+            <div class="step-header">
+                <div>
+                    <span class="step-name">${data.step}. ${data.agent}</span>
+                </div>
+                <span class="step-status fail">HATA</span>
+            </div>
+            <div class="step-content" style="color:#ef4444;">${escapeHtml(data.error || "")}</div>
+        `;
+        return;
+    }
+
+    if (data.type === "done") {
+        resultContainer.innerHTML = `
+            <div class="result">
+                <h3>SONUC</h3>
+                <div class="result-content">${escapeHtml(data.final_answer || "")}</div>
+                <div class="result-meta">
+                    Pipeline: ${data.pipeline} | Sure: ${data.duration_ms}ms | Basarili: ${data.success}
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    if (data.type === "error") {
+        resultContainer.innerHTML = `<div class="result" style="background:#ef4444;"><h3>HATA</h3><div class="result-content">${escapeHtml(data.message)}</div></div>`;
+        return;
+    }
 }
 
 function renderSteps(data) {
