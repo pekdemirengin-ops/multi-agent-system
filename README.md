@@ -16,6 +16,8 @@ Moduler, dagitik multi-agent sistemi. FastAPI + WebSocket + Redis + Docker + LLM
 - **Streaming:** SSE ile kelime kelime cevap
 - **Guvenlik modu:** Log tarama (15+ tehdit)
 - Sohbet gecmisi (PostgreSQL + kalici volume)
+- **Skill sistemi:** calculator, translation, file_operations
+- **Multi-Agent Pipeline:** research, code, content, social, fact
 
 
 ## Istatistikler
