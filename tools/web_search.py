@@ -21,11 +21,15 @@ def search_with_answer(query: str, max_results: int = 5) -> dict[str, Any]:
         else:
             client = TavilyClient()
 
+        # Turkce zorla: sorguya ekle + country
+        turkish_query = f"{query} (Türkçe cevap ver)"
+
         response = client.search(
-            query=query,
+            query=turkish_query,
             max_results=max_results,
             search_depth="basic",
             include_answer=True,
+            country="turkey",
         )
 
         results = []
