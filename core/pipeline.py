@@ -250,7 +250,17 @@ class Pipeline:
 
         last = collected[-1]
         if isinstance(last, dict):
-            return last
+            # Standart field'lari sirayla dene
+            for key in ["answer", "research", "translation", "result", "output", "content", "summary"]:
+                if key in last and last[key]:
+                    val = last[key]
+                    return {"answer": str(val)}
+            # Hicbiri yoksa ilk string field'i al
+            for key, val in last.items():
+                if isinstance(val, str) and val:
+                    return {"answer": val}
+            return {"answer": str(last)}
+
         return {"answer": str(last)}
 
 
