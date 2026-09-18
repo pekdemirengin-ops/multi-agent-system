@@ -16,3 +16,4 @@ __all__ = [
     "SummarizerAgent",
     "RouterAgent",
 ]
+from agents.ai.intent_analyzer import IntentAnalyzer

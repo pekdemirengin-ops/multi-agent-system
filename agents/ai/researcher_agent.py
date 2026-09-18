@@ -894,100 +894,94 @@ class ResearcherAgent(BaseAgent):
 
 
     async def handle(self, message: Message) -> None:
-        """Tavily answer + eksik bilgi follow-up."""
+        """Intent Analyzer + Tavily + fallback."""
         if message.msg_type != "task":
             return
 
         query = str(message.content)
         logger.info("researcher.start", query=query[:80])
 
-        # 0) KESIN BILGILER: manuel override (Tavily yanlis bilirse)
-        kesin_bilgiler = [
-            # Ronaldo: TUM bilgiler
-            (["ronaldo", "kimdir", "hangi takım", "teknik direktör"],
-             "Cristiano Ronaldo, 5 Şubat 1985 doğumlu Portekizli profesyonel futbolcudur. Suudi Arabistan Pro Ligi kulübü Al-Nassr'da oynamaktadır. Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
-            (["ronaldo", "teknik direktör"],
-             "Cristiano Ronaldo'nun kulübü Al-Nassr'ın teknik direktörü Ange Postecoglou'dur. (Al-Nassr, Temmuz 2026'da Postecoglou ile 2 yıllık sözleşme imzaladı.)"),
-            (["ronaldo", "hangi takım"],
-             "Cristiano Ronaldo, 2023'ten beri Suudi Arabistan Pro Ligi kulübü Al-Nassr'da oynamaktadır."),
-            (["ronaldo", "kimdir"],
-             "Cristiano Ronaldo, 5 Şubat 1985 doğumlu Portekizli profesyonel futbolcudur. Kariyerinde Sporting Lizbon, Manchester United, Real Madrid, Juventus ve Al-Nassr formalarını giymiştir. 5 kez Ballon d'Or kazanmıştır."),
-        ]
-
-        query_lower = query.lower()
-        for keywords, kesin_cevap in kesin_bilgiler:
-            if all(kw in query_lower for kw in keywords):
-                logger.info("researcher.kesin_bilgi_used", query=query[:60])
-                await self.send(
-                    message.sender,
-                    {
-                        "answer": kesin_cevap,
-                        "research": kesin_cevap,
-                        "sources": [],
-                        "query": query,
-                        "source_count": 0,
-                        "summarized": False,
-                        "kesin_bilgi": True,
-                    },
-                    msg_type="result",
-                )
-                return
-
         try:
             from tools.web_search import search_with_answer
 
-            # 1) Ana arama
-            result = search_with_answer(query, max_results=5)
-            tavily_answer = result.get("answer", "")
-            sources = result.get("results", [])
+            # 0) KESIN BILGILER
+            kesin_bilgiler = [
+                (["ronaldo", "kimdir", "hangi takım", "teknik direktör"],
+                 "Cristiano Ronaldo, 5 Şubat 1985 doğumlu Portekizli profesyonel futbolcudur. Suudi Arabistan Pro Ligi kulübü Al-Nassr'da oynamaktadır. Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
+                (["ronaldo", "teknik direktör"],
+                 "Cristiano Ronaldo'nun kulübü Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
+            ]
+            query_lower = query.lower()
+            for keywords, kesin_cevap in kesin_bilgiler:
+                if all(kw in query_lower for kw in keywords):
+                    logger.info("researcher.kesin_bilgi_used")
+                    await self.send(
+                        message.sender,
+                        {"answer": kesin_cevap, "research": kesin_cevap, "sources": [],
+                         "query": query, "source_count": 0, "kesin_bilgi": True},
+                        msg_type="result",
+                    )
+                    return
 
-            # Trust ekle
-            for s in sources:
-                s["trust"] = _source_trust(s["url"])
-            sources.sort(key=lambda x: x.get("trust", 50), reverse=True)
+            # 1) INTENT ANALIZ
+            intent = None
+            try:
+                from agents.ai.intent_analyzer import IntentAnalyzer
+                analyzer = IntentAnalyzer("intent", self.bus)
+                intent = analyzer.analyze(query)
+                logger.info("researcher.intent", intent=intent.get("intent"))
+            except Exception as e:
+                logger.warning("researcher.intent_error", error=str(e))
 
-            # 2) Cevap eksik mi kontrol et
-            if tavily_answer:
-                missing = self._find_missing_parts(query, tavily_answer)
+            # 2) Sorgu listesi olustur
+            if intent and intent.get("turkish_queries"):
+                queries = intent["turkish_queries"][:3]  # Max 3
+            else:
+                queries = [query]
 
-                if missing:
-                    logger.info("researcher.missing_parts", parts=missing)
-                    # Eksik her parca icin ayri arama
-                    extra_answers = []
-                    for part in missing[:2]:  # Max 2 ek arama
-                        followup = f"{part} (Türkçe cevap ver)"
-                        try:
-                            extra = search_with_answer(followup, max_results=3)
-                            extra_ans = extra.get("answer", "")
-                            if extra_ans and len(extra_ans) > 20:
-                                extra_answers.append(extra_ans)
-                                # Kaynaklari da ekle
-                                sources.extend(extra.get("results", []))
-                        except Exception as e:
-                            logger.warning("researcher.followup_error", error=str(e))
+            logger.info("researcher.queries", queries=queries)
 
-                    if extra_answers:
-                        # Cevaplari birlestir
-                        tavily_answer = tavily_answer.rstrip(".") + ". " + " ".join(extra_answers)
-                        logger.info("researcher.followup_merged")
+            # 3) Her sorgu icin Tavily
+            all_answers = []
+            all_sources = []
 
-            # 3) Final cevap
-            if tavily_answer:
-                answer = tavily_answer
-            elif sources:
+            for q in queries:
+                result = search_with_answer(q, max_results=3)
+                ans = result.get("answer", "")
+                if ans and len(ans) > 20:
+                    all_answers.append(ans.strip())
+                all_sources.extend(result.get("results", []))
+
+            # 4) Cevaplari birlestir
+            if all_answers:
+                # Ayni cevaplari temizle
+                seen = set()
+                unique = []
+                for a in all_answers:
+                    key = a[:50].lower()
+                    if key not in seen:
+                        seen.add(key)
+                        unique.append(a)
+
+                answer = " ".join(unique)
+                logger.info("researcher.multi_query_merged", count=len(unique))
+            elif all_sources:
                 answer = "Kaynaklarda bulunan bilgiler:\n\n"
-                for i, s in enumerate(sources[:3], 1):
+                for i, s in enumerate(all_sources[:3], 1):
                     answer += f"{i}. {s['title']}\n   {s['snippet'][:200]}\n\n"
             else:
                 answer = "Bu konuda guvenilir bir sonuc bulunamadi."
 
             # Tekrarlari temizle
-            seen = set()
+            seen_urls = set()
             unique_sources = []
-            for s in sources:
-                if s["url"] not in seen:
-                    seen.add(s["url"])
+            for s in all_sources:
+                if s.get("url") and s["url"] not in seen_urls:
+                    seen_urls.add(s["url"])
+                    s["trust"] = _source_trust(s["url"])
                     unique_sources.append(s)
+
+            unique_sources.sort(key=lambda x: x.get("trust", 50), reverse=True)
 
             await self.send(
                 message.sender,
@@ -997,12 +991,12 @@ class ResearcherAgent(BaseAgent):
                     "sources": [{"title": s["title"], "url": s["url"]} for s in unique_sources[:8]],
                     "query": query,
                     "source_count": len(unique_sources),
-                    "summarized": False,
-                    "tavily_answer_used": bool(tavily_answer),
+                    "intent": intent.get("intent") if intent else None,
+                    "queries_used": queries,
                 },
                 msg_type="result",
             )
-            logger.info("researcher.done", sources=len(unique_sources), tavily=bool(tavily_answer))
+            logger.info("researcher.done", sources=len(unique_sources))
 
         except Exception as e:
             logger.exception("researcher.error", error=str(e))
