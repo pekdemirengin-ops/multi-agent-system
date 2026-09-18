@@ -356,8 +356,25 @@ function renderResult(data) {
 }
 
 function escapeHtml(text) {
+    if (!text) return "";
+    // Unicode ozel karakterleri temizle
+    let clean = String(text);
+    clean = clean.replace(/\\u202f/g, " ");  // narrow no-break space
+    clean = clean.replace(/\\u00a0/g, " ");  // no-break space
+    clean = clean.replace(/\\u2009/g, " ");  // thin space
+    clean = clean.replace(/\\u2008/g, " ");  // punctuation space
+    clean = clean.replace(/\\u2007/g, " ");  // figure space
+    clean = clean.replace(/\\u2006/g, " ");  // six-per-em space
+    clean = clean.replace(/\\u2005/g, " ");  // four-per-em space
+    clean = clean.replace(/\\u2004/g, " ");  // three-per-em space
+    clean = clean.replace(/\\u2003/g, " ");  // em space
+    clean = clean.replace(/\\u2002/g, " ");  // en space
+    clean = clean.replace(/\\u2001/g, " ");  // em quad
+    clean = clean.replace(/\\u2000/g, " ");  // en quad
+    clean = clean.replace(/\\u200b/g, "");   // zero-width space
+    
     const div = document.createElement("div");
-    div.textContent = text;
+    div.textContent = clean;
     return div.innerHTML;
 }
 
