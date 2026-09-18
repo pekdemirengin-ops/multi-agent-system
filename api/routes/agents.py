@@ -18,6 +18,16 @@ from agents.ai import (
     RouterAgent,
     SummarizerAgent,
 )
+from agents.skills import (
+    CalculatorAgent,
+    DataAnalystAgent,
+    EmailComposerAgent,
+    FactCheckerAgent,
+    FileManagerAgent,
+    QuizMakerAgent,
+    SocialMediaAgent,
+    TranslatorAgent,
+)
 from agents.devops import SystemAgent
 from agents.security import AlertAgent, LogWatcherAgent
 from agents.workflow import ApprovalAgent, EmailAgent
@@ -87,6 +97,15 @@ async def init_agents() -> None:
             "approval": ApprovalAgent("approval", _bus),
             "npc": NPCAgent("npc", _bus, personality="friendly"),
             "pathfinder": PathfindingAgent("pathfinder", _bus),
+            # YENI 8 AGENT (skills-based)
+            "translator": TranslatorAgent("translator", _bus),
+            "calculator": CalculatorAgent("calculator", _bus),
+            "file_manager": FileManagerAgent("file_manager", _bus),
+            "fact_checker": FactCheckerAgent("fact_checker", _bus),
+            "data_analyst": DataAnalystAgent("data_analyst", _bus),
+            "quiz_maker": QuizMakerAgent("quiz_maker", _bus),
+            "email_composer": EmailComposerAgent("email_composer", _bus),
+            "social_media": SocialMediaAgent("social_media", _bus),
         }
     )
 
