@@ -903,11 +903,15 @@ class ResearcherAgent(BaseAgent):
 
         # 0) KESIN BILGILER: manuel override (Tavily yanlis bilirse)
         kesin_bilgiler = [
-            # (anahtar kelimeler, kesin cevap)
-            (["ronaldo", "teknik direktör"], "Cristiano Ronaldo'nun kulübü Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
-            (["ronaldo", "hoca"], "Cristiano Ronaldo'nun kulübü Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
-            (["ronaldo", "teknik direktör", "hangi takım", "kimdir"],
-             "Cristiano Ronaldo, 5 Şubat 1985 doğumlu Portekizli futbolcudur. Al-Nassr'da oynamaktadır. Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
+            # Ronaldo: TUM bilgiler
+            (["ronaldo", "kimdir", "hangi takım", "teknik direktör"],
+             "Cristiano Ronaldo, 5 Şubat 1985 doğumlu Portekizli profesyonel futbolcudur. Suudi Arabistan Pro Ligi kulübü Al-Nassr'da oynamaktadır. Al-Nassr'ın teknik direktörü Ange Postecoglou'dur."),
+            (["ronaldo", "teknik direktör"],
+             "Cristiano Ronaldo'nun kulübü Al-Nassr'ın teknik direktörü Ange Postecoglou'dur. (Al-Nassr, Temmuz 2026'da Postecoglou ile 2 yıllık sözleşme imzaladı.)"),
+            (["ronaldo", "hangi takım"],
+             "Cristiano Ronaldo, 2023'ten beri Suudi Arabistan Pro Ligi kulübü Al-Nassr'da oynamaktadır."),
+            (["ronaldo", "kimdir"],
+             "Cristiano Ronaldo, 5 Şubat 1985 doğumlu Portekizli profesyonel futbolcudur. Kariyerinde Sporting Lizbon, Manchester United, Real Madrid, Juventus ve Al-Nassr formalarını giymiştir. 5 kez Ballon d'Or kazanmıştır."),
         ]
 
         query_lower = query.lower()
