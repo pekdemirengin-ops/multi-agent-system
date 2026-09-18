@@ -545,26 +545,7 @@ agentsBar.appendChild(btn);
 statusText.textContent = "Hazir - " + data.count + " agent (6 gorunur)";
 } catch (e) { statusText.textContent = "Baglanti hatasi"; }
 };
-agentsBar.appendChild(autoBtn);
-data.agents.forEach((agent) => {
-if (agent.name === "router") return;
-const btn = document.createElement("button");
-btn.className = "agent-btn";
-btn.textContent = agent.name;
-btn.onclick = () => {
-currentAgent = agent.name;
-document.querySelectorAll(".agent-btn").forEach((b) => b.classList.remove("active"));
-btn.classList.add("active");
-};
-agentsBar.appendChild(btn);
-});
-statusText.textContent = "Hazir - " + data.count + " agent";
-} catch (e) { statusText.textContent = "Baglanti hatasi"; }
-}
 
-// ============================================================
-// MESSAGE
-// ============================================================
 function escapeHtml(text) {
 const div = document.createElement("div");
 div.textContent = text;
