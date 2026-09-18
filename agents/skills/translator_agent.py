@@ -1,6 +1,7 @@
-"""Translator Agent - ceviri agent'i."""
+﻿"""Translator Agent - ceviri agent'i."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import structlog
@@ -23,24 +24,44 @@ class TranslatorAgent(BaseAgent):
             return
         try:
             text = str(message.content)
-            # Basit dil algilama: "ingilizceye cevir" -> en
-            target = "en"
             lower = text.lower()
-            if "turkce" in lower or "türkçe" in lower:
+
+            # Hedef dil
+            target = "en"
+            if "türkçe" in lower or "turkce" in lower:
                 target = "tr"
             elif "almanca" in lower:
                 target = "de"
-            elif "fransizca" in lower or "fransızca" in lower:
+            elif "fransızca" in lower or "fransizca" in lower:
                 target = "fr"
+            elif "ispanyolca" in lower:
+                target = "es"
+            elif "rusça" in lower or "rusca" in lower:
+                target = "ru"
 
-            # Metni temizle
-            for w in ["ingilizceye cevir", "turkceye cevir", "türkçeye çevir",
-                      "almancaya cevir", "fransizcaya cevir", "cevir", "çevir"]:
-                text = text.replace(w, "").replace(w.title(), "")
-            text = text.strip(" :.,!")
+            # Metni temizle: "cevir", "çevir", "ingilizceye", "türkçeye" vs.
+            clean = text
+            patterns = [
+                r"\bingilizceye\s+[çc]evir\b",
+                r"\bt[üu]rk[çc]eye\s+[çc]evir\b",
+                r"\balmancaya\s+[çc]evir\b",
+                r"\bfrans[ıi]zcaya\s+[çc]evir\b",
+                r"\bispanyolcaya\s+[çc]evir\b",
+                r"\brus[çc]aya\s+[çc]evir\b",
+                r"\b[çc]evir\b",
+                r"\btranslate\s+to\s+\w+\b",
+                r"\btranslate\b",
+            ]
+            for p in patterns:
+                clean = re.sub(p, "", clean, flags=re.IGNORECASE)
+            clean = clean.strip(" :.,!?")
 
-            result = await self.skill(text=text, target_lang=target)
+            if not clean:
+                clean = text
+
+            result = await self.skill(text=clean, target_lang=target)
             answer = result.get("translation", result.get("error", "Ceviri yapilamadi"))
+
             await self.send(message.sender, {"answer": answer}, msg_type="result")
             logger.info("translator.done", target=target, length=len(answer))
         except Exception as e:
