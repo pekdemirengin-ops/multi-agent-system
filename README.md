@@ -18,6 +18,8 @@ Moduler, dagitik multi-agent sistemi. FastAPI + WebSocket + Redis + Docker + LLM
 - Sohbet gecmisi (PostgreSQL + kalici volume)
 - **Skill sistemi:** calculator, translation, file_operations
 - **Multi-Agent Pipeline:** research, code, content, social, fact
+- **Skill sistemi:** calculator, translation, file_operations
+- **Multi-Agent Pipeline:** research, code, content, social, fact
 
 
 ## Istatistikler
