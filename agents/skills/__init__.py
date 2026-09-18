@@ -13,3 +13,7 @@ __all__ = [
     "FactCheckerAgent", "DataAnalystAgent", "QuizMakerAgent",
     "EmailComposerAgent", "SocialMediaAgent",
 ]
+
+from agents.skills.web_scraper_agent import WebScraperAgent
+
+__all__ = __all__ + ["WebScraperAgent"]

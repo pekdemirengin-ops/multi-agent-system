@@ -20,6 +20,7 @@ from agents.ai import (
 )
 from agents.skills import (
     CalculatorAgent,
+    WebScraperAgent,
     DataAnalystAgent,
     EmailComposerAgent,
     FactCheckerAgent,
@@ -106,6 +107,7 @@ async def init_agents() -> None:
             "quiz_maker": QuizMakerAgent("quiz_maker", _bus),
             "email_composer": EmailComposerAgent("email_composer", _bus),
             "social_media": SocialMediaAgent("social_media", _bus),
+            "web_scraper": WebScraperAgent("web_scraper", _bus),
         }
     )
 
@@ -214,7 +216,7 @@ async def ask(
     get_agent(chosen_agent)
 
     # Bazi agent'lar icin hafiza context'i KULLANMA
-    NO_HISTORY_AGENTS = {"researcher", "log_watcher", "pathfinder", "npc", "llm", "coder", "translator", "calculator", "file_manager", "fact_checker", "data_analyst", "quiz_maker", "email_composer", "social_media"}
+    NO_HISTORY_AGENTS = {"researcher", "log_watcher", "pathfinder", "npc", "llm", "coder", "translator", "calculator", "file_manager", "fact_checker", "data_analyst", "quiz_maker", "email_composer", "social_media", "web_scraper"}
     if chosen_agent in NO_HISTORY_AGENTS:
         full_message = req.message
     elif history_text:
