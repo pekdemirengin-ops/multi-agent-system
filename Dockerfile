@@ -21,6 +21,7 @@ COPY core/ ./core/
 COPY agents/ ./agents/
 COPY tools/ ./tools/
 COPY api/ ./api/
+COPY skills/ ./skills/
 COPY static/ ./static/
 
 # Data klasoru (SQLite hafiza icin)
