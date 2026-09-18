@@ -10,6 +10,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from agents.ai import (
+    AutonomousAgent,
     CoderAgent,
     LLMAgent,
     PlannerAgent,
@@ -108,6 +109,7 @@ async def init_agents() -> None:
             "email_composer": EmailComposerAgent("email_composer", _bus),
             "social_media": SocialMediaAgent("social_media", _bus),
             "web_scraper": WebScraperAgent("web_scraper", _bus),
+            "autonomous": AutonomousAgent("autonomous", _bus),
         }
     )
 
@@ -216,7 +218,7 @@ async def ask(
     get_agent(chosen_agent)
 
     # Bazi agent'lar icin hafiza context'i KULLANMA
-    NO_HISTORY_AGENTS = {"researcher", "log_watcher", "pathfinder", "npc", "llm", "coder", "translator", "calculator", "file_manager", "fact_checker", "data_analyst", "quiz_maker", "email_composer", "social_media", "web_scraper"}
+    NO_HISTORY_AGENTS = {"researcher", "log_watcher", "pathfinder", "npc", "llm", "coder", "translator", "calculator", "file_manager", "fact_checker", "data_analyst", "quiz_maker", "email_composer", "social_media", "web_scraper", "autonomous"}
     if chosen_agent in NO_HISTORY_AGENTS:
         full_message = req.message
     elif history_text:

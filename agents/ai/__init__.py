@@ -17,3 +17,5 @@ __all__ = [
     "RouterAgent",
 ]
 from agents.ai.intent_analyzer import IntentAnalyzer
+
+from agents.ai.autonomous_agent import AutonomousAgent
