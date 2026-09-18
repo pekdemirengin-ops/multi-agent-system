@@ -1,0 +1,236 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autonomous Agent</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+min-height: 100vh; padding: 20px; }
+.container { background: white; border-radius: 20px;
+box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+max-width: 900px; margin: 0 auto; padding: 30px; }
+h1 { color: #333; margin-bottom: 8px; font-size: 24px; }
+.subtitle { color: #888; font-size: 14px; margin-bottom: 24px; }
+.examples { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.example-btn { padding: 8px 14px; border: 2px solid #e5e5ea;
+background: white; border-radius: 20px; cursor: pointer;
+font-size: 12px; font-weight: 500; color: #555; }
+.example-btn:hover { border-color: #667eea; color: #667eea; }
+.input-area { display: flex; gap: 10px; margin-bottom: 20px; }
+.input-area input { flex: 1; padding: 14px 18px; border: 2px solid #e5e5ea;
+border-radius: 12px; font-size: 15px; outline: none; }
+.input-area button { padding: 14px 28px; background: #667eea; color: white;
+border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.plan-box { background: #f7f7fa; border-radius: 12px; padding: 16px;
+margin-bottom: 16px; display: none; }
+.plan-box.visible { display: block; }
+.step { border: 1px solid #e5e5ea; border-radius: 12px; padding: 14px;
+margin-bottom: 10px; background: #fafafc; }
+.step-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.step-name { font-weight: 700; color: #333; font-size: 13px; }
+.step-status { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; }
+.step-status.pending { background: #fef3c7; color: #92400e; }
+.step-status.done { background: #d1fae5; color: #065f46; }
+.step-status.error { background: #fee2e2; color: #991b1b; }
+.step-content { font-size: 12px; color: #555; line-height: 1.5;
+white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+.report { margin-top: 24px; padding: 20px;
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+border-radius: 12px; color: white; }
+.report h2 { font-size: 18px; margin-bottom: 12px;
+border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 8px; }
+.report-content { font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+.report-meta { margin-top: 16px; padding-top: 12px;
+border-top: 1px solid rgba(255,255,255,0.3); font-size: 12px; }
+.loading { text-align: center; padding: 20px; color: #888; }
+.back-link { display: inline-block; margin-bottom: 20px; color: #667eea;
+text-decoration: none; font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <a href="/" class="back-link"> Ana Sayfa</a>
+    <h1> Autonomous Agent</h1>
+    <p class="subtitle">Hedef ver  kendi planlar  adım adım çalıştırır  rapor yazar</p>
+
+    <div class="examples" id="examples"></div>
+
+    <div class="input-area">
+        <input type="text" id="goalInput" placeholder="Hedefinizi yazın..." autocomplete="off">
+        <button id="runBtn" onclick="runAutonomous()">Çalıştır</button>
+    </div>
+
+    <div class="plan-box" id="planBox">
+        <h3> Plan</h3>
+        <ul class="plan-steps" id="planSteps"></ul>
+    </div>
+
+    <div id="stepsContainer"></div>
+    <div id="reportContainer"></div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+let token = localStorage.getItem("token");
+if (!token) { window.location.href = "/"; }
+function authHeaders() {
+    return { "Content-Type": "application/json", "Authorization": "Bearer " + token };
+}
+
+async function loadExamples() {
+    try {
+        const res = await fetch(`${API_BASE}/api/autonomous/examples`, { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        const c = document.getElementById("examples");
+        c.innerHTML = "";
+        data.examples.forEach(ex => {
+            const btn = document.createElement("button");
+            btn.className = "example-btn";
+            btn.textContent = ex.goal;
+            btn.onclick = () => { document.getElementById("goalInput").value = ex.goal; };
+            c.appendChild(btn);
+        });
+    } catch (e) { console.error(e); }
+}
+
+async function runAutonomous() {
+    const goal = document.getElementById("goalInput").value.trim();
+    if (!goal) return;
+    const runBtn = document.getElementById("runBtn");
+    const stepsC = document.getElementById("stepsContainer");
+    const reportC = document.getElementById("reportContainer");
+    const planBox = document.getElementById("planBox");
+    const planSteps = document.getElementById("planSteps");
+
+    runBtn.disabled = true;
+    runBtn.textContent = "Çalışıyor...";
+    stepsC.innerHTML = '<div class="loading">Plan oluşturuluyor...</div>';
+    reportC.innerHTML = "";
+    planBox.classList.remove("visible");
+    planSteps.innerHTML = "";
+
+    try {
+        const res = await fetch(`${API_BASE}/api/autonomous/stream`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({ goal: goal, timeout: 120 })
+        });
+        if (!res.ok) {
+            stepsC.innerHTML = `<div class="step"><div class="step-content" style="color:#ef4444;">Hata: ${res.status}</div></div>`;
+            runBtn.disabled = false; runBtn.textContent = "Çalıştır"; return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\\n");
+            buffer = lines.pop();
+            for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                    try { handleEvent(JSON.parse(line.slice(6))); }
+                    catch (e) { console.error(e); }
+                }
+            }
+        }
+    } catch (e) {
+        stepsC.innerHTML = `<div class="step"><div class="step-content" style="color:#ef4444;">Bağlantı hatası: ${e.message}</div></div>`;
+    }
+    runBtn.disabled = false;
+    runBtn.textContent = "Çalıştır";
+}
+
+function handleEvent(data) {
+    const stepsC = document.getElementById("stepsContainer");
+    const reportC = document.getElementById("reportContainer");
+    const planBox = document.getElementById("planBox");
+    const planSteps = document.getElementById("planSteps");
+
+    if (data.type === "planning") {
+        stepsC.innerHTML = '<div class="loading"> Plan oluşturuluyor...</div>';
+    }
+    if (data.type === "plan_ready") {
+        stepsC.innerHTML = "";
+        planBox.classList.add("visible");
+        planSteps.innerHTML = "";
+        data.steps.forEach(s => {
+            const li = document.createElement("li");
+            li.textContent = `${s.step}. ${s.query} [${s.agent}]`;
+            planSteps.appendChild(li);
+        });
+    }
+    if (data.type === "step_start") {
+        const div = document.createElement("div");
+        div.className = "step";
+        div.id = `step-${data.step}`;
+        div.innerHTML = `
+            <div class="step-header">
+                <span class="step-name">${data.step}. ${escapeHtml(data.query)}</span>
+                <span class="step-status pending">ÇALIŞIYOR</span>
+            </div>
+            <div class="step-content"> ${data.agent} çalışıyor...</div>
+        `;
+        stepsC.appendChild(div);
+    }
+    if (data.type === "step_done") {
+        const div = document.getElementById(`step-${data.step}`);
+        if (div) div.innerHTML = `
+            <div class="step-header">
+                <span class="step-name">${data.step}. Adım</span>
+                <span class="step-status done">BAŞARILI (${data.duration_ms}ms)</span>
+            </div>
+            <div class="step-content">${escapeHtml(data.output || "")}</div>
+        `;
+    }
+    if (data.type === "step_error") {
+        const div = document.getElementById(`step-${data.step}`);
+        if (div) div.innerHTML = `
+            <div class="step-header">
+                <span class="step-name">${data.step}. Adım</span>
+                <span class="step-status error">HATA</span>
+            </div>
+            <div class="step-content" style="color:#ef4444;">${escapeHtml(data.error || "")}</div>
+        `;
+    }
+    if (data.type === "report_generating") {
+        reportC.innerHTML = '<div class="loading"> Rapor hazırlanıyor...</div>';
+    }
+    if (data.type === "done") {
+        reportC.innerHTML = `
+            <div class="report">
+                <h2> Final Rapor</h2>
+                <div class="report-content">${escapeHtml(data.final_report)}</div>
+                <div class="report-meta">
+                    Süre: ${(data.duration_ms / 1000).toFixed(1)}sn | 
+                    Adım: ${data.steps_completed}/${data.total_steps}
+                </div>
+            </div>
+        `;
+    }
+    if (data.type === "error") {
+        reportC.innerHTML = `<div class="report" style="background:#ef4444;"><h2>HATA</h2><div>${escapeHtml(data.message)}</div></div>`;
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return "";
+    const div = document.createElement("div");
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+document.getElementById("goalInput").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") runAutonomous();
+});
+loadExamples();
+</script>
+
+</body>
+</html>
