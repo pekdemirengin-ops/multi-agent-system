@@ -70,7 +70,7 @@ async def run_pipeline(
     result = await pipeline.run(req.query)
 
     # Gecmise ekle
-    add_result(
+    await add_result(
         pipeline_name=result.pipeline_name,
         query=result.query,
         success=result.success,
@@ -97,8 +97,8 @@ async def get_pipeline_history(
     _user: str = Depends(get_current_user),
 ) -> dict:
     """Pipeline calistirma gecmisi."""
-    items = get_history(limit=limit)
-    stats = get_stats()
+    items = await get_history(limit=limit)
+    stats = await get_stats()
     return {
         "history": items,
         "stats": stats,
@@ -111,5 +111,5 @@ async def clear_pipeline_history(
     _user: str = Depends(get_current_user),
 ) -> dict:
     """Gecmisi temizler (sadece admin)."""
-    count = clear_history()
+    count = await clear_history()
     return {"ok": True, "cleared": count}
