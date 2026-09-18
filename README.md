@@ -9,7 +9,7 @@ Moduler, dagitik multi-agent sistemi. FastAPI + WebSocket + Redis + Docker + LLM
 **[multi-agent-system-production-9301.up.railway.app](https://multi-agent-system-production-9301.up.railway.app)**
 
 - Giris: `admin` / `admin123`
-- **15 agent**, web arayuzu, mobil uyumlu
+- **22 agent** (14 temel + 8 skill-based), web arayuzu, mobil uyumlu
 - **Multi-user:** Kayit ol, giris yap, rol yonetimi (admin/user)
 - **Admin paneli:** Kullanici listesi, rol degistirme, silme
 - Sesli kullanim (MIC + TTS)
@@ -22,9 +22,11 @@ Moduler, dagitik multi-agent sistemi. FastAPI + WebSocket + Redis + Docker + LLM
 
 | Metrik | Deger |
 |--------|-------|
-| Agent sayisi | **15** |
-| API endpoint | **11** |
-| Web modu | **5** (Auto, CANLI, GUVENLIK, MIC, SES) |
+| Agent sayisi | **22** (14 temel + 8 skill-based) |
+| Skill sayisi | **5** (calculator, translation, file, vs.) |
+| Pipeline | **5** (research, code, content, social, fact) |
+| API endpoint | **15+** |
+| Web modu | **5 + Pipeline** (Auto, CANLI, GUVENLIK, MIC, SES) |
 | Test | **80** (pytest + async) |
 | Commit | **73+** |
 | Veritabani | **PostgreSQL + SQLite fallback** |
@@ -57,7 +59,9 @@ Moduler, dagitik multi-agent sistemi. FastAPI + WebSocket + Redis + Docker + LLM
 ## Ozellikler
 
 ### AI & Agent
-- **15 Agent:** researcher, llm, coder, planner, reviewer, summarizer, router, system, log_watcher, alert, email, approval, npc, pathfinder, api_collector
+- **22 Agent:** researcher, llm, coder, planner, reviewer, summarizer, router, system, log_watcher, alert, email, approval, npc, pathfinder + **translator, calculator, file_manager, fact_checker, data_analyst, quiz_maker, email_composer, social_media**
+- **5 Skill:** calculator, translation, file_operations, (base + registry)
+- **5 Pipeline:** research, code, content, social, fact (multi-agent sirali calistirma)
 - **Hibrit Router:** Regex (0ms) + LLM fallback
 - **Akilli Arastirma:** LLM'siz + yil ekleme + agresif puanlama
 - **RAG:** Web search (ddgs) + LLM ozetleme
