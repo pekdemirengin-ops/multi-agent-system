@@ -894,7 +894,7 @@ class ResearcherAgent(BaseAgent):
 
 
     async def handle(self, message: Message) -> None:
-        """Intent Analyzer + Tavily + fallback."""
+        """Intent Analyzer + Tavily + COKLU varlik destegi."""
         if message.msg_type != "task":
             return
 
@@ -929,32 +929,41 @@ class ResearcherAgent(BaseAgent):
                 from agents.ai.intent_analyzer import IntentAnalyzer
                 analyzer = IntentAnalyzer("intent", self.bus)
                 intent = analyzer.analyze(query)
-                logger.info("researcher.intent", intent=intent.get("intent"))
+                logger.info("researcher.intent",
+                            intent=intent.get("intent"),
+                            plural=intent.get("is_plural"),
+                            expected=intent.get("expected_count"))
             except Exception as e:
                 logger.warning("researcher.intent_error", error=str(e))
 
-            # 2) Sorgu listesi olustur
+            # 2) Sorgu listesi
             if intent and intent.get("turkish_queries"):
-                queries = intent["turkish_queries"][:3]  # Max 3
+                queries = intent["turkish_queries"][:6]  # Max 6 sorgu (cogul icin)
             else:
                 queries = [query]
 
-            logger.info("researcher.queries", queries=queries)
+            is_plural = intent.get("is_plural", False) if intent else False
+            expected_count = intent.get("expected_count") if intent else None
+
+            logger.info("researcher.queries", count=len(queries), plural=is_plural)
 
             # 3) Her sorgu icin Tavily
             all_answers = []
             all_sources = []
 
             for q in queries:
-                result = search_with_answer(q, max_results=3)
-                ans = result.get("answer", "")
-                if ans and len(ans) > 20:
-                    all_answers.append(ans.strip())
-                all_sources.extend(result.get("results", []))
+                try:
+                    result = search_with_answer(q, max_results=3)
+                    ans = result.get("answer", "")
+                    if ans and len(ans) > 20:
+                        all_answers.append(ans.strip())
+                    all_sources.extend(result.get("results", []))
+                except Exception as e:
+                    logger.warning("researcher.query_error", query=q[:40], error=str(e))
 
-            # 4) Cevaplari birlestir
+            # 4) Cevap birlestirme
             if all_answers:
-                # Ayni cevaplari temizle
+                # Tekrarlari temizle
                 seen = set()
                 unique = []
                 for a in all_answers:
@@ -963,16 +972,24 @@ class ResearcherAgent(BaseAgent):
                         seen.add(key)
                         unique.append(a)
 
-                answer = " ".join(unique)
-                logger.info("researcher.multi_query_merged", count=len(unique))
+                if is_plural and len(unique) > 1:
+                    # COKLU CEVAP: Numarali liste
+                    answer = "Bulunan bilgiler:\n\n"
+                    for i, a in enumerate(unique, 1):
+                        answer += f"{i}. {a}\n\n"
+                    logger.info("researcher.plural_answer", count=len(unique))
+                else:
+                    # Tekil cevap: birlestir
+                    answer = " ".join(unique)
+                    logger.info("researcher.single_answer")
             elif all_sources:
                 answer = "Kaynaklarda bulunan bilgiler:\n\n"
-                for i, s in enumerate(all_sources[:3], 1):
+                for i, s in enumerate(all_sources[:5], 1):
                     answer += f"{i}. {s['title']}\n   {s['snippet'][:200]}\n\n"
             else:
                 answer = "Bu konuda guvenilir bir sonuc bulunamadi."
 
-            # Tekrarlari temizle
+            # Kaynak temizle
             seen_urls = set()
             unique_sources = []
             for s in all_sources:
@@ -992,11 +1009,12 @@ class ResearcherAgent(BaseAgent):
                     "query": query,
                     "source_count": len(unique_sources),
                     "intent": intent.get("intent") if intent else None,
+                    "is_plural": is_plural,
                     "queries_used": queries,
                 },
                 msg_type="result",
             )
-            logger.info("researcher.done", sources=len(unique_sources))
+            logger.info("researcher.done", sources=len(unique_sources), plural=is_plural)
 
         except Exception as e:
             logger.exception("researcher.error", error=str(e))
