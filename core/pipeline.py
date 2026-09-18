@@ -102,11 +102,10 @@ PIPELINES: dict[str, list[PipelineStep]] = {
         ),
     ],
     "translate": [
-        PipelineStep(agent="researcher", name="Arastirma"),
         PipelineStep(
             agent="translator",
             name="Ceviri",
-            transform=lambda prev: f"Su metni Ingilizceye cevir: {prev.get('answer', str(prev))[:500]}",
+            transform=lambda prev: prev if isinstance(prev, str) else prev.get("answer", str(prev)),
         ),
     ],
     "summary": [
