@@ -48,6 +48,12 @@ border-top: 1px solid rgba(255,255,255,0.3); font-size: 12px; }
 .loading { text-align: center; padding: 20px; color: #888; }
 .back-link { display: inline-block; margin-bottom: 20px; color: #667eea;
 text-decoration: none; font-size: 14px; font-weight: 600; }
+
+.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.temizle-btn { padding: 8px 16px; background: #ef4444; color: white;
+border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+cursor: pointer; transition: background 0.2s; }
+.temizle-btn:hover { background: #dc2626; }
 </style>
 </head>
 <body>
@@ -72,8 +78,7 @@ text-decoration: none; font-size: 14px; font-weight: 600; }
         <ul class="plan-steps" id="planSteps"></ul>
     </div>
 
-    <div id="stepsContainer"></div>
-    <div id="reportContainer"></div>
+    <div id="researchList" class="research-list"></div>
 </div>
 
 <script>
@@ -104,18 +109,27 @@ async function loadExamples() {
 async function runAutonomous() {
     const goal = document.getElementById("goalInput").value.trim();
     if (!goal) return;
+
     const runBtn = document.getElementById("runBtn");
-    const stepsC = document.getElementById("stepsContainer");
-    const reportC = document.getElementById("reportContainer");
-    const planBox = document.getElementById("planBox");
-    const planSteps = document.getElementById("planSteps");
+    const researchList = document.getElementById("researchList");
 
     runBtn.disabled = true;
-    runBtn.textContent = "Çalışıyor...";
-    stepsC.innerHTML = '<div class="loading">Plan oluşturuluyor...</div>';
-    reportC.innerHTML = "";
-    planBox.classList.remove("visible");
-    planSteps.innerHTML = "";
+    runBtn.textContent = "Calisiyor...";
+
+    const cardId = "card-" + Date.now();
+    const card = document.createElement("div");
+    card.className = "research-card";
+    card.id = cardId;
+    card.innerHTML = `
+        <div class="research-card-header">
+            <div class="research-card-title">Hedef: ${escapeHtml(goal)}</div>
+            <button class="research-card-delete" onclick="deleteCard('${cardId}')" title="Sil">x</button>
+        </div>
+        <div class="research-card-meta" id="${cardId}-meta">Plan olusturuluyor...</div>
+        <div class="research-card-steps" id="${cardId}-steps"></div>
+        <div id="${cardId}-report"></div>
+    `;
+    researchList.insertBefore(card, researchList.firstChild);
 
     try {
         const res = await fetch(`${API_BASE}/api/autonomous/stream`, {
@@ -124,8 +138,8 @@ async function runAutonomous() {
             body: JSON.stringify({ goal: goal, timeout: 120 })
         });
         if (!res.ok) {
-            stepsC.innerHTML = `<div class="step"><div class="step-content" style="color:#ef4444;">Hata: ${res.status}</div></div>`;
-            runBtn.disabled = false; runBtn.textContent = "Çalıştır"; return;
+            document.getElementById(`${cardId}-meta`).textContent = "Hata: " + res.status;
+            runBtn.disabled = false; runBtn.textContent = "Calistir"; return;
         }
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -134,91 +148,79 @@ async function runAutonomous() {
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\\n");
+            const lines = buffer.split("\n");
             buffer = lines.pop();
             for (const line of lines) {
                 if (line.startsWith("data: ")) {
-                    try { handleEvent(JSON.parse(line.slice(6))); }
+                    try { handleEvent(JSON.parse(line.slice(6)), cardId); }
                     catch (e) { console.error(e); }
                 }
             }
         }
     } catch (e) {
-        stepsC.innerHTML = `<div class="step"><div class="step-content" style="color:#ef4444;">Bağlantı hatası: ${e.message}</div></div>`;
+        document.getElementById(`${cardId}-meta`).textContent = "Baglanti hatasi: " + e.message;
     }
+
     runBtn.disabled = false;
-    runBtn.textContent = "Çalıştır";
+    runBtn.textContent = "Calistir";
+    document.getElementById("goalInput").value = "";
+    document.getElementById("goalInput").focus();
 }
 
-function handleEvent(data) {
-    const stepsC = document.getElementById("stepsContainer");
-    const reportC = document.getElementById("reportContainer");
-    const planBox = document.getElementById("planBox");
-    const planSteps = document.getElementById("planSteps");
+function handleEvent(data, cardId) {
+    const meta = document.getElementById(`${cardId}-meta`);
+    const stepsC = document.getElementById(`${cardId}-steps`);
+    const reportC = document.getElementById(`${cardId}-report`);
+
+    if (!meta) return;
 
     if (data.type === "planning") {
-        stepsC.innerHTML = '<div class="loading"> Plan oluşturuluyor...</div>';
+        meta.textContent = "Plan olusturuluyor...";
     }
     if (data.type === "plan_ready") {
-        stepsC.innerHTML = "";
-        planBox.classList.add("visible");
-        planSteps.innerHTML = "";
-        data.steps.forEach(s => {
-            const li = document.createElement("li");
-            li.textContent = `${s.step}. ${s.query} [${s.agent}]`;
-            planSteps.appendChild(li);
-        });
+        meta.textContent = `Plan hazir (${data.total_steps} adim)`;
+        if (stepsC) {
+            stepsC.innerHTML = "";
+            data.steps.forEach(s => {
+                const div = document.createElement("div");
+                div.className = "research-card-step";
+                div.id = `${cardId}-step-${s.step}`;
+                div.textContent = `${s.step}. ${s.query} [${s.agent}]`;
+                stepsC.appendChild(div);
+            });
+        }
     }
     if (data.type === "step_start") {
-        const div = document.createElement("div");
-        div.className = "step";
-        div.id = `step-${data.step}`;
-        div.innerHTML = `
-            <div class="step-header">
-                <span class="step-name">${data.step}. ${escapeHtml(data.query)}</span>
-                <span class="step-status pending">ÇALIŞIYOR</span>
-            </div>
-            <div class="step-content"> ${data.agent} çalışıyor...</div>
-        `;
-        stepsC.appendChild(div);
+        const el = document.getElementById(`${cardId}-step-${data.step}`);
+        if (el) el.textContent = `${data.step}. ${data.query} [CALISIYOR]`;
     }
     if (data.type === "step_done") {
-        const div = document.getElementById(`step-${data.step}`);
-        if (div) div.innerHTML = `
-            <div class="step-header">
-                <span class="step-name">${data.step}. Adım</span>
-                <span class="step-status done">BAŞARILI (${data.duration_ms}ms)</span>
-            </div>
-            <div class="step-content">${escapeHtml(data.output || "")}</div>
-        `;
+        const el = document.getElementById(`${cardId}-step-${data.step}`);
+        if (el) el.textContent = `${data.step}. Adim [BASARILI - ${data.duration_ms}ms]`;
     }
     if (data.type === "step_error") {
-        const div = document.getElementById(`step-${data.step}`);
-        if (div) div.innerHTML = `
-            <div class="step-header">
-                <span class="step-name">${data.step}. Adım</span>
-                <span class="step-status error">HATA</span>
-            </div>
-            <div class="step-content" style="color:#ef4444;">${escapeHtml(data.error || "")}</div>
-        `;
+        const el = document.getElementById(`${cardId}-step-${data.step}`);
+        if (el) el.textContent = `${data.step}. Adim [HATA]`;
     }
     if (data.type === "report_generating") {
-        reportC.innerHTML = '<div class="loading"> Rapor hazırlanıyor...</div>';
+        meta.textContent = "Rapor hazirlaniyor...";
     }
     if (data.type === "done") {
-        reportC.innerHTML = `
-            <div class="report">
-                <h2> Final Rapor</h2>
-                <div class="report-content">${escapeHtml(data.final_report)}</div>
-                <div class="report-meta">
-                    Süre: ${(data.duration_ms / 1000).toFixed(1)}sn | 
-                    Adım: ${data.steps_completed}/${data.total_steps}
-                </div>
-            </div>
-        `;
+        meta.textContent = `Tamamlandi - ${(data.duration_ms / 1000).toFixed(1)}sn | ${data.steps_completed}/${data.total_steps} adim`;
+        if (reportC) {
+            reportC.innerHTML = `<div class="research-card-report">${escapeHtml(data.final_report)}</div>`;
+        }
     }
     if (data.type === "error") {
-        reportC.innerHTML = `<div class="report" style="background:#ef4444;"><h2>HATA</h2><div>${escapeHtml(data.message)}</div></div>`;
+        meta.textContent = "Hata: " + data.message;
+    }
+}
+
+function deleteCard(cardId) {
+    const card = document.getElementById(cardId);
+    if (card) {
+        card.style.opacity = "0.3";
+        setTimeout(() => card.remove(), 200);
     }
 }
 
@@ -230,21 +232,12 @@ function escapeHtml(text) {
 }
 
 function temizle() {
-    // Input temizle
-    document.getElementById("goalInput").value = "";
-    // Plan temizle
-    document.getElementById("planBox").classList.remove("visible");
-    document.getElementById("planSteps").innerHTML = "";
-    // Adimlar temizle
-    document.getElementById("stepsContainer").innerHTML = "";
-    // Rapor temizle
-    document.getElementById("reportContainer").innerHTML = "";
-    // Buton durumunu sifirla
+    const input = document.getElementById("goalInput");
+    if (input) { input.value = ""; input.focus(); }
+    const researchList = document.getElementById("researchList");
+    if (researchList) researchList.innerHTML = "";
     const runBtn = document.getElementById("runBtn");
-    runBtn.disabled = false;
-    runBtn.textContent = "Çalıştır";
-    // Input'a focus
-    document.getElementById("goalInput").focus();
+    if (runBtn) { runBtn.disabled = false; runBtn.textContent = "Calistir"; }
 }
 
 document.getElementById("goalInput").addEventListener("keypress", (e) => {
