@@ -309,6 +309,21 @@ function renderSteps(data) {
         const status = step.success ? "ok" : "fail";
         const statusText = step.success ? "BAŞARILI" : "HATA";
 
+        // Output'u temizle (dict -> sadece answer)
+        let outputText = step.output || step.error || "";
+        if (typeof outputText === "string") {
+            // Python dict gibi gorunuyorsa answer field'ini cikar
+            const match = outputText.match(/\{'answer':\s*['"]([^'"]+)['"]/);
+            if (match) {
+                outputText = match[1];
+            } else {
+                const match2 = outputText.match(/\{"answer":\s*"([^"]+)"/);
+                if (match2) {
+                    outputText = match2[1];
+                }
+            }
+        }
+
         div.innerHTML = `
             <div class="step-header">
                 <div>
@@ -317,7 +332,7 @@ function renderSteps(data) {
                 </div>
                 <span class="step-status ${status}">${statusText}</span>
             </div>
-            <div class="step-content">${escapeHtml(step.output || step.error || "")}</div>
+            <div class="step-content">${escapeHtml(outputText)}</div>
         `;
         container.appendChild(div);
     });
